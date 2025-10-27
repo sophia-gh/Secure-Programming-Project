@@ -49,6 +49,11 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
     }
     
     if (currentLine == lineNumber && std::getline(file, line)) {
+        size_t pos = line.find(':');
+        if (pos != std::string::npos) {
+            line.erase(0, pos+1);
+        }
+
         std::vector<std::string> fields;
         std::stringstream ss(line);
         std::string field;
@@ -232,7 +237,6 @@ int addRoomNumber(const std::string& filename, std::string number) {
     inFile.close();
     tempFile.close();
     
-    // Replace original file with temp file
     std::remove(filename.c_str());
     std::rename("temp.txt", filename.c_str());
     
@@ -247,46 +251,56 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
         return false;
     }
     
+    auto trim = [](const std::string& s) {
+        size_t a = s.find_first_not_of(" \t\r\n");
+        if (a == std::string::npos) return std::string();
+        size_t b = s.find_last_not_of(" \t\r\n");
+        return s.substr(a, b - a + 1);
+    };
+
     std::string line;
     int currentLine = 1;
     bool foundAndDeleted = false;
     
     while (std::getline(inFile, line)) {
         if (currentLine == lineNumber) {
-            std::vector<std::string> fields;
-            std::stringstream ss(line);
+            std::string prefix;
+            std::string rest;
+            size_t colonPos = line.find(':');
+            if (colonPos != std::string::npos) {
+                prefix = line.substr(0, colonPos + 1);
+                rest = line.substr(colonPos + 1);
+            } else {
+
+                prefix.clear();
+                rest = line;
+            }
+
+            std::vector<std::string> kept;
+            std::stringstream ss(rest);
             std::string field;
-            
             while (std::getline(ss, field, ',')) {
-                std::string trimmedField = field;
-                trimmedField.erase(0, trimmedField.find_first_not_of(" \t\n\r"));
-                trimmedField.erase(trimmedField.find_last_not_of(" \t\n\r") + 1);
-                
-                if (trimmedField != nameToDelete && 
-                    !(field.length() >= nameToDelete.length() && 
-                      field.substr(0, nameToDelete.length()) == nameToDelete &&
-                      (field.length() == nameToDelete.length() || 
-                       std::isspace(static_cast<unsigned char>(field[nameToDelete.length()]))))) {
-                    fields.push_back(field);
-                } else {
+                std::string t = trim(field);
+                if (t.empty()) continue; 
+                if (t == nameToDelete) {
                     foundAndDeleted = true;
+                } else {
+                    kept.push_back(t);
                 }
             }
-            
-            // Reconstruct the line with commas
-            if (!fields.empty()) {
-                for (size_t i = 0; i < fields.size(); ++i) {
-                    tempFile << fields[i];
-                    if (i < fields.size() - 1) {
-                        tempFile << ",";
-                    }
+
+            tempFile << prefix;
+            if (!kept.empty()) {
+                for (size_t i = 0; i < kept.size(); ++i) {
+                    if (i) tempFile << ',';
+                    tempFile << kept[i];
                 }
             }
             tempFile << '\n';
         } else {
             tempFile << line << '\n';
         }
-        currentLine++;
+        ++currentLine;
     }
     
     inFile.close();
@@ -419,20 +433,23 @@ void addLog(Args arguments) {
 	if(arguments.employeeName != "noEName")
 	    name = arguments.employeeName;
 	else
-            name = arguments.guestName;
+        name = arguments.guestName;
         
-        std::cout << "Checking for name: " << name << std::endl;
+    std::cout << "Checking for name: " << name << std::endl;
 
 	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
             bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
 	    if(exists) {
 		//add to room number line and remove from gallery line 
-         	int lineNumber = addRoomNumber(arguments.logFileName, arguments.roomNumber);
+         	addRoomNumber(arguments.logFileName, arguments.roomNumber);
+            int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
+            std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
-		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+            appendToLine(arguments.logFileName, GALLERY_LINE+1, name);
 	    }
 	    else {
-		std::cerr << "Person is not in the gallery" << std::endl;
+		    std::cerr << "Person is not in the gallery" << std::endl;
 	    }
 	}
 
@@ -442,7 +459,7 @@ void addLog(Args arguments) {
 	    if(exists) {
 		//add to room number line and remove from gallery line 
 	        appendToLine(arguments.logFileName, lineNumber + 1, name);
-		deleteNameFromLine(arguments.logFileName, lineNumber, name);
+		    deleteNameFromLine(arguments.logFileName, lineNumber, name);
 	    }
 	    else {
 		std::cerr << "Error 255: Person is not in that room" << std::endl;
@@ -453,7 +470,7 @@ void addLog(Args arguments) {
 	    if(exists) {
 		//add to room number line and remove from gallery line 
 	        appendToLine(arguments.logFileName, GALLERY_LINE + 1, name);
-		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 	    }
 	    else {
 		std::cerr << "Error 255: Person is not in gallery room" << std::endl;
