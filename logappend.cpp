@@ -257,16 +257,11 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
             std::stringstream ss(line);
             std::string field;
             
-            // Split by commas and keep only non-matching fields
             while (std::getline(ss, field, ',')) {
-                // For trailing comma case: check if field ends with the name
-                // Remove any trailing whitespace first
                 std::string trimmedField = field;
                 trimmedField.erase(0, trimmedField.find_first_not_of(" \t\n\r"));
                 trimmedField.erase(trimmedField.find_last_not_of(" \t\n\r") + 1);
                 
-                // Check if the trimmed field matches the name to delete
-                // OR if the original field ends with the name (for trailing comma case)
                 if (trimmedField != nameToDelete && 
                     !(field.length() >= nameToDelete.length() && 
                       field.substr(0, nameToDelete.length()) == nameToDelete &&
@@ -321,6 +316,78 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     }
     
     return 0;
+}
+
+bool ensureGalleryHeaderLine3(const std::string& filename) {
+    std::ifstream inFile(filename);
+    if (!inFile.is_open()) {
+        return false;
+    }
+
+    std::vector<std::string> lines;
+    std::string line;
+    while (std::getline(inFile, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back(); // handle CRLF
+        lines.push_back(line);
+    }
+    inFile.close();
+
+    while (lines.size() < 4) lines.push_back("");
+
+    auto trim_leading = [](const std::string& s) {
+        size_t i = s.find_first_not_of(" \t\r\n");
+        return (i == std::string::npos) ? std::string() : s.substr(i);
+    };
+
+    bool changed = false;
+    {
+        std::string third = lines[2];
+        std::string trimmed = trim_leading(third);
+
+        if (trimmed.rfind("G:", 0) == 0) {
+            std::string remainder = trimmed.substr(2);
+            std::string normalized = std::string("G:") + remainder;
+            if (lines[2] != normalized) {
+                lines[2] = normalized;
+                changed = true;
+            }
+        } else {
+            lines[2] = std::string("G:") + (trimmed.empty() ? std::string() : trimmed);
+            changed = true;
+        }
+    }
+
+    {
+        std::string fourth = lines[3];
+        std::string trimmed = trim_leading(fourth);
+
+        if (trimmed.rfind("lG:", 0) == 0) {
+            std::string remainder = trimmed.substr(3);
+            std::string normalized = std::string("lG:") + remainder;
+            if (lines[3] != normalized) {
+                lines[3] = normalized;
+                changed = true;
+            }
+        } else {
+            lines[3] = std::string("lG:") + (trimmed.empty() ? std::string() : trimmed);
+            changed = true;
+        }
+    }
+
+    if (!changed) return true;
+
+    std::ofstream outFile("temp.txt");
+    if (!outFile.is_open()) return false;
+    for (size_t i = 0; i < lines.size(); ++i) {
+        outFile << lines[i];
+        if (i + 1 < lines.size()) outFile << '\n';
+    }
+    outFile.close();
+
+    std::remove(filename.c_str());
+    std::rename("temp.txt", filename.c_str());
+
+    return true;
 }
 
 void addLog(Args arguments) {
@@ -464,6 +531,8 @@ int main(int argc, char* argv[]) {
     }
     
     //Make sure log file if empty line 3 contains a G: before it.
+    
+    ensureGalleryHeaderLine3(args.logFileName);
 
     // Require key
     if (args.key == "noKey" || args.key.empty()) {
