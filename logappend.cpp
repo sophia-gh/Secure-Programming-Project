@@ -2,6 +2,14 @@
 #include <string>
 #include <unistd.h> // getopt on POSIX
 #include <cstdlib>
+#include <fstream>
+#include <vector>
+#include <sstream>
+
+#define EMPLOYEE_LINE 1
+#define GUEST_LINE 2
+#define GALLERY_LINE 3
+
 
 struct Args {
     std::string timestamp = "0";
@@ -27,6 +35,294 @@ void usage(const char* prog) {
               << "  -h    show this help\n";
 }
 
+bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+    
+    std::string line;
+    int currentLine = 1;
+    
+    while (currentLine < lineNumber && std::getline(file, line)) {
+        currentLine++;
+    }
+    
+    if (currentLine == lineNumber && std::getline(file, line)) {
+        std::vector<std::string> fields;
+        std::stringstream ss(line);
+        std::string field;
+        
+        while (std::getline(ss, field, ',')) {
+            field.erase(0, field.find_first_not_of(" \t\n\r"));
+            field.erase(field.find_last_not_of(" \t\n\r") + 1);
+            
+            if (field == searchString) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool appendToLine(const std::string& filename, int lineNumber, const std::string& dataToAdd) {
+    std::ifstream inFile(filename);
+    std::ofstream tempFile("temp.txt");
+    
+    if (!inFile.is_open() || !tempFile.is_open()) {
+        return false;
+    }
+    
+    std::string line;
+    int currentLine = 1;
+    bool lineExists = false;
+    
+    while (std::getline(inFile, line)) {
+        if (currentLine == lineNumber) {
+            tempFile << line << dataToAdd << "," << '\n';
+            lineExists = true;
+        } else {
+            tempFile << line << '\n';
+        }
+        currentLine++;
+    }
+
+    if (!lineExists) {
+
+        while (currentLine < lineNumber) {
+            tempFile << "\n";
+            currentLine++;
+        }
+
+        tempFile << dataToAdd << "," << '\n';
+    }
+    
+    inFile.close();
+    tempFile.close();
+    
+
+    std::remove(filename.c_str());
+    std::rename("temp.txt", filename.c_str());
+    
+    return true;
+}
+
+int addRoomNumber(const std::string& filename, std::string number) {
+    std::ifstream inFile(filename);
+    std::ofstream tempFile("temp.txt");
+    
+    if (!inFile.is_open() || !tempFile.is_open()) {
+        return 0;
+    }
+    
+    std::vector<std::string> allLines;
+    std::string line;
+    
+
+    while (std::getline(inFile, line)) {
+        allLines.push_back(line);
+    }
+    inFile.close();
+    
+    std::string numberPrefix = number + ":";
+    
+
+    bool numberExists = false;
+    for (const auto& l : allLines) {
+        if (l.find(numberPrefix) == 0) { 
+            numberExists = true;
+            break;
+        }
+    }
+    
+    if (numberExists) {
+        return 0; 
+    }
+    
+
+    inFile.open(filename);
+    if (!inFile.is_open()) {
+        return 0;
+    }
+    
+    int currentLine = 1;
+    int addedLineNumber = 0;
+    std::string prevLine = "";
+    bool prevLineWasBlank = false;
+    int prevLineNumber = 0;
+    
+    while (std::getline(inFile, line)) {
+
+        bool isBlank = true;
+        for (char c : line) {
+            if (!std::isspace(static_cast<unsigned char>(c))) {
+                isBlank = false;
+                break;
+            }
+        }
+        
+
+        if (isBlank && prevLineWasBlank && addedLineNumber == 0) {
+
+            tempFile << numberPrefix << "\n";
+            tempFile << "l" << number << ":\n";
+            addedLineNumber = prevLineNumber;
+        } else if (prevLineWasBlank && !isBlank && addedLineNumber == 0) {
+            tempFile << "\n" << line << "\n";
+        } else {
+            tempFile << line << "\n";
+        }
+        
+        prevLine = line;
+        prevLineWasBlank = isBlank;
+        prevLineNumber = currentLine;
+        currentLine++;
+    }
+
+    if (prevLineWasBlank && addedLineNumber == 0) {
+        
+        inFile.clear();
+        inFile.seekg(0);
+        
+        std::vector<std::string> lines;
+        while (std::getline(inFile, line)) {
+            lines.push_back(line);
+        }
+        
+        if (lines.size() >= 2) {
+            bool lastLineBlank = true;
+            bool secondLastLineBlank = true;
+            
+            for (char c : lines[lines.size() - 1]) {
+                if (!std::isspace(static_cast<unsigned char>(c))) {
+                    lastLineBlank = false;
+                    break;
+                }
+            }
+            
+            for (char c : lines[lines.size() - 2]) {
+                if (!std::isspace(static_cast<unsigned char>(c))) {
+                    secondLastLineBlank = false;
+                    break;
+                }
+            }
+            
+            if (lastLineBlank && secondLastLineBlank) {
+
+                inFile.close();
+                tempFile.close();
+                
+                std::ifstream inFile2(filename);
+                std::ofstream tempFile2("temp.txt");
+                
+                for (size_t i = 0; i < lines.size() - 2; ++i) {
+                    tempFile2 << lines[i] << "\n";
+                }
+                tempFile2 << numberPrefix << "\n";
+                tempFile2 << "l" << number << ":\n";
+                addedLineNumber = lines.size() - 1;
+                
+                inFile2.close();
+                tempFile2.close();
+            }
+        }
+    }
+    
+    inFile.close();
+    tempFile.close();
+    
+    // Replace original file with temp file
+    std::remove(filename.c_str());
+    std::rename("temp.txt", filename.c_str());
+    
+    return addedLineNumber;
+}
+
+bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::string& nameToDelete) {
+    std::ifstream inFile(filename);
+    std::ofstream tempFile("temp.txt");
+    
+    if (!inFile.is_open() || !tempFile.is_open()) {
+        return false;
+    }
+    
+    std::string line;
+    int currentLine = 1;
+    bool foundAndDeleted = false;
+    
+    while (std::getline(inFile, line)) {
+        if (currentLine == lineNumber) {
+            std::vector<std::string> fields;
+            std::stringstream ss(line);
+            std::string field;
+            
+            // Split by commas and keep only non-matching fields
+            while (std::getline(ss, field, ',')) {
+                // For trailing comma case: check if field ends with the name
+                // Remove any trailing whitespace first
+                std::string trimmedField = field;
+                trimmedField.erase(0, trimmedField.find_first_not_of(" \t\n\r"));
+                trimmedField.erase(trimmedField.find_last_not_of(" \t\n\r") + 1);
+                
+                // Check if the trimmed field matches the name to delete
+                // OR if the original field ends with the name (for trailing comma case)
+                if (trimmedField != nameToDelete && 
+                    !(field.length() >= nameToDelete.length() && 
+                      field.substr(0, nameToDelete.length()) == nameToDelete &&
+                      (field.length() == nameToDelete.length() || 
+                       std::isspace(static_cast<unsigned char>(field[nameToDelete.length()]))))) {
+                    fields.push_back(field);
+                } else {
+                    foundAndDeleted = true;
+                }
+            }
+            
+            // Reconstruct the line with commas
+            if (!fields.empty()) {
+                for (size_t i = 0; i < fields.size(); ++i) {
+                    tempFile << fields[i];
+                    if (i < fields.size() - 1) {
+                        tempFile << ",";
+                    }
+                }
+            }
+            tempFile << '\n';
+        } else {
+            tempFile << line << '\n';
+        }
+        currentLine++;
+    }
+    
+    inFile.close();
+    tempFile.close();
+    
+    std::remove(filename.c_str());
+    std::rename("temp.txt", filename.c_str());
+    
+    return foundAndDeleted;
+}
+
+int findRoomNumberLine(const std::string& filename, const std::string& number) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return 0; 
+    }
+    
+    std::string line;
+    int currentLine = 1;
+    std::string searchPattern = number + ":";
+    
+    while (std::getline(file, line)) {
+        if (line.find(searchPattern) == 0) {
+            return currentLine;
+        }
+        currentLine++;
+    }
+    
+    return 0;
+}
+
 void addLog(Args arguments) {
         // open log file, make sure its not currently open 
             // someHow check the key == correct key, not sure how
@@ -42,6 +338,76 @@ void addLog(Args arguments) {
         // if -A==true, add ",name" to roomNumber line
         // if -L==true, remove ",name" from roomNumber line
             // if -L == true but ",name" is not on roomNumber line, throw error 255
+	
+	//key check
+
+	// current probs:
+	//     G: and #: still not appearing at beginning of line
+	//     I don't think the l#: was showing either
+
+
+        //add employeeName
+	std::string name = "0";
+
+	if(arguments.employeeName != "noEName")
+	    name = arguments.employeeName;
+	else
+            name = arguments.guestName;
+        
+        std::cout << "Checking for name: " << name << std::endl;
+
+	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
+            bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+	    if(exists) {
+		//add to room number line and remove from gallery line 
+         	int lineNumber = addRoomNumber(arguments.logFileName, arguments.roomNumber);
+	        appendToLine(arguments.logFileName, lineNumber, name);
+		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+	    }
+	    else {
+		std::cerr << "Person is not in the gallery" << std::endl;
+	    }
+	}
+
+	if(arguments.leaving && arguments.roomNumber != "noRoomNumber") {
+	    int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
+            bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
+	    if(exists) {
+		//add to room number line and remove from gallery line 
+	        appendToLine(arguments.logFileName, lineNumber + 1, name);
+		deleteNameFromLine(arguments.logFileName, lineNumber, name);
+	    }
+	    else {
+		std::cerr << "Error 255: Person is not in that room" << std::endl;
+	    }
+	}
+	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
+            bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+	    if(exists) {
+		//add to room number line and remove from gallery line 
+	        appendToLine(arguments.logFileName, GALLERY_LINE + 1, name);
+		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+	    }
+	    else {
+		std::cerr << "Error 255: Person is not in gallery room" << std::endl;
+	    }
+	}
+        
+	// DO TIMESTAMP
+	if(arguments.employeeName != "noEName") {
+                std::cout << "Entering employee add" << std::endl;
+	    if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) {
+		bool added = appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
+		std::cout << "Adding?" << added << std::endl;
+	    }
+	}
+	else
+            if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
+	        appendToLine(arguments.logFileName, GUEST_LINE, name);
+
+	if(arguments.arrival && arguments.roomNumber == "noRoomNumber") 
+            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+        
 }
 
 int main(int argc, char* argv[]) {
@@ -96,6 +462,8 @@ int main(int argc, char* argv[]) {
         usage(argv[0]);
         return 1;
     }
+    
+    //Make sure log file if empty line 3 contains a G: before it.
 
     // Require key
     if (args.key == "noKey" || args.key.empty()) {
