@@ -404,6 +404,59 @@ bool ensureGalleryHeaderLine3(const std::string& filename) {
     return true;
 }
 
+void setUpFile(const std::string& filename) {
+	std::ifstream inFile(filename);
+        std::ofstream tempFile("temp.txt");
+
+	if(!inFile.is_open() || !tempFile.is_open()) {
+		return;
+	}
+
+	std::string line;
+        
+	int currentLine = 1;
+ 
+	while (currentLine < 29) {
+		if (!std::getline(inFile, line)) {
+            		// EOF reached - create empty line with appropriate prefix
+            		line = "";  // Clear any previous content
+        	}
+		std::cout << "wah!" << line << std::endl;
+		if(currentLine == 1) {
+			if(line.find("employees in gallery line:") == std::string::npos) {
+				line.insert(0, "employees in gallery line:");
+			}
+		}
+		else if(currentLine == 2) {
+			if(line.find("guests in gallery line:") == std::string::npos) {
+				line.insert(0, "guests in gallery line:");
+			}
+		}
+		else if(currentLine == 3) {
+			if(line.find("names in gallery line:") == std::string::npos) {
+				line.insert(0, "names in gallery line:");
+			}
+		}
+		else if(currentLine > 3) {
+			std::string lineNumber = std::to_string(currentLine-3);
+			std::string toSearch = "names in room " + lineNumber + ":";
+			if(line.find(toSearch) == std::string::npos)
+				line.insert(0, toSearch);
+		}
+
+		tempFile << line << '\n';
+
+		++currentLine;
+	}
+
+    	inFile.close();
+    	tempFile.close();
+    
+
+   	std::remove(filename.c_str());
+   	std::rename("temp.txt", filename.c_str());
+}
+
 void addLog(Args arguments) {
         // open log file, make sure its not currently open 
             // someHow check the key == correct key, not sure how
@@ -435,7 +488,7 @@ void addLog(Args arguments) {
 	else
         name = arguments.guestName;
         
-    std::cout << "Checking for name: " << name << std::endl;
+
 
 	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
             bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
@@ -549,7 +602,8 @@ int main(int argc, char* argv[]) {
     
     //Make sure log file if empty line 3 contains a G: before it.
     
-    ensureGalleryHeaderLine3(args.logFileName);
+    //ensureGalleryHeaderLine3(args.logFileName);
+    setUpFile(args.logFileName);
 
     // Require key
     if (args.key == "noKey" || args.key.empty()) {
