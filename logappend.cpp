@@ -9,6 +9,7 @@
 #define EMPLOYEE_LINE 1
 #define GUEST_LINE 2
 #define GALLERY_LINE 3
+#define ROOM_NUMBER_COUNT 29
 
 
 struct Args {
@@ -20,6 +21,7 @@ struct Args {
     std::string employeeName = "noEName";
     std::string guestName = "noGName";
     std::string logFileName = "test.txt";
+    std::string fullCommand = "none";
 };
 
 void usage(const char* prog) {
@@ -69,6 +71,40 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
     }
     
     return false;
+}
+
+bool appendLineToFile(const std::string& filename, const std::string& lineToAppend) {
+    std::ifstream inFile(filename);
+    std::ofstream tempFile("temp.txt");
+    
+    if (!inFile.is_open() || !tempFile.is_open()) {
+        return false;
+    }
+    
+    std::vector<std::string> allLines;
+    std::string line;
+    
+    // Read all existing lines into vector
+    while (std::getline(inFile, line)) {
+        allLines.push_back(line);
+    }
+    inFile.close();
+    
+    std::cout << allLines.back() << std::endl;
+    allLines.push_back(lineToAppend);
+    
+    // Write all lines back to temp file
+    for (const auto& l : allLines) {
+        tempFile << l << "\n";
+    }
+    
+    tempFile.close();
+    
+    // Replace original file
+    std::remove(filename.c_str());
+    std::rename("temp.txt", filename.c_str());
+    
+    return true;
 }
 
 bool appendToLine(const std::string& filename, int lineNumber, const std::string& dataToAdd) {
@@ -405,56 +441,68 @@ bool ensureGalleryHeaderLine3(const std::string& filename) {
 }
 
 void setUpFile(const std::string& filename) {
-	std::ifstream inFile(filename);
-        std::ofstream tempFile("temp.txt");
+    std::ifstream inFile(filename);
+    std::ofstream tempFile("temp.txt");
 
-	if(!inFile.is_open() || !tempFile.is_open()) {
-		return;
-	}
+    if(!inFile.is_open() || !tempFile.is_open()) {
+        return;
+    }
 
-	std::string line;
-        
-	int currentLine = 1;
- 
-	while (currentLine < 29) {
-		if (!std::getline(inFile, line)) {
-            		// EOF reached - create empty line with appropriate prefix
-            		line = "";  // Clear any previous content
-        	}
-		std::cout << "wah!" << line << std::endl;
-		if(currentLine == 1) {
-			if(line.find("employees in gallery line:") == std::string::npos) {
-				line.insert(0, "employees in gallery line:");
-			}
-		}
-		else if(currentLine == 2) {
-			if(line.find("guests in gallery line:") == std::string::npos) {
-				line.insert(0, "guests in gallery line:");
-			}
-		}
-		else if(currentLine == 3) {
-			if(line.find("names in gallery line:") == std::string::npos) {
-				line.insert(0, "names in gallery line:");
-			}
-		}
-		else if(currentLine > 3) {
-			std::string lineNumber = std::to_string(currentLine-3);
-			std::string toSearch = "names in room " + lineNumber + ":";
-			if(line.find(toSearch) == std::string::npos)
-				line.insert(0, toSearch);
-		}
-
-		tempFile << line << '\n';
-
-		++currentLine;
-	}
-
-    	inFile.close();
-    	tempFile.close();
+    std::vector<std::string> allLines;
+    std::string line;
     
+    // Read ALL lines from the original file first
+    while (std::getline(inFile, line)) {
+        allLines.push_back(line);
+    }
+    inFile.close();
 
-   	std::remove(filename.c_str());
-   	std::rename("temp.txt", filename.c_str());
+    int currentLine = 1;
+ 
+    // Process only the first ROOM_NUMBER_COUNT lines
+    while (currentLine < ROOM_NUMBER_COUNT) {
+        if (currentLine - 1 < allLines.size()) {
+            // We have an existing line - use it
+            line = allLines[currentLine - 1];
+        } else {
+            // We need to create a new line
+            line = "";
+        }
+
+        if(currentLine == 1) {
+            if(line.find("employees in gallery line:") == std::string::npos) {
+                line.insert(0, "employees in gallery line:");
+            }
+        }
+        else if(currentLine == 2) {
+            if(line.find("guests in gallery line:") == std::string::npos) {
+                line.insert(0, "guests in gallery line:");
+            }
+        }
+        else if(currentLine == 3) {
+            if(line.find("names in gallery line:") == std::string::npos) {
+                line.insert(0, "names in gallery line:");
+            }
+        }
+        else if(currentLine > 3) {
+            std::string lineNumber = std::to_string(currentLine-3);
+            std::string toSearch = "names in room " + lineNumber + ":";
+            if(line.find(toSearch) == std::string::npos)
+                line.insert(0, toSearch);
+        }
+
+        tempFile << line << '\n';
+        ++currentLine;
+    }
+
+    // Now write any remaining lines that were beyond ROOM_NUMBER_COUNT
+    for (size_t i = ROOM_NUMBER_COUNT - 1; i < allLines.size(); i++) {
+        tempFile << allLines[i] << '\n';
+    }
+
+    tempFile.close();
+    std::remove(filename.c_str());
+    std::rename("temp.txt", filename.c_str());
 }
 
 void addLog(Args arguments) {
@@ -494,12 +542,11 @@ void addLog(Args arguments) {
             bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
 	    if(exists) {
 		//add to room number line and remove from gallery line 
-         	addRoomNumber(arguments.logFileName, arguments.roomNumber);
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
             std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
 		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
-            appendToLine(arguments.logFileName, GALLERY_LINE+1, name);
+
 	    }
 	    else {
 		    std::cerr << "Person is not in the gallery" << std::endl;
@@ -521,9 +568,8 @@ void addLog(Args arguments) {
 	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
             bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
 	    if(exists) {
-		//add to room number line and remove from gallery line 
-	        appendToLine(arguments.logFileName, GALLERY_LINE + 1, name);
-		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 	    }
 	    else {
 		std::cerr << "Error 255: Person is not in gallery room" << std::endl;
@@ -531,20 +577,22 @@ void addLog(Args arguments) {
 	}
         
 	// DO TIMESTAMP
-	if(arguments.employeeName != "noEName") {
-                std::cout << "Entering employee add" << std::endl;
+	if(arguments.employeeName != "noEName" && arguments.arrival) {
+
 	    if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) {
 		bool added = appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
-		std::cout << "Adding?" << added << std::endl;
+
 	    }
 	}
-	else
+	else if(arguments.employeeName == "noEName" && arguments.arrival)
             if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
 	        appendToLine(arguments.logFileName, GUEST_LINE, name);
 
 	if(arguments.arrival && arguments.roomNumber == "noRoomNumber") 
             appendToLine(arguments.logFileName, GALLERY_LINE, name);
-        
+
+
+        appendLineToFile(arguments.logFileName, arguments.fullCommand);
 }
 
 int main(int argc, char* argv[]) {
@@ -624,7 +672,8 @@ int main(int argc, char* argv[]) {
         //if not print error (log state does not align: name never entered room)
     }
 
-    //add info to logfile, make sure things are correct. 
+    //add info to logfile, make sure things are correct.
+    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "");
     addLog(args);
 
     // Example debug output
