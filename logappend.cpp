@@ -27,7 +27,7 @@ struct Args {
 void usage(const char* prog) {
     std::cerr << "Usage: " << prog
               << " -T <timestamp> -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>\n"
-              << "  -T <timestamp>\n"
+              << "  -T <timestamp> ex. '2023-11-03 15:28'\n"
               << "  -K <key>\n"
               << "  -A    arrival (mutually exclusive with -L)\n"
               << "  -L    leaving (mutually exclusive with -A) (must be in room to leave)\n"
@@ -149,136 +149,6 @@ bool appendToLine(const std::string& filename, int lineNumber, const std::string
     return true;
 }
 
-int addRoomNumber(const std::string& filename, std::string number) {
-    std::ifstream inFile(filename);
-    std::ofstream tempFile("temp.txt");
-    
-    if (!inFile.is_open() || !tempFile.is_open()) {
-        return 0;
-    }
-    
-    std::vector<std::string> allLines;
-    std::string line;
-    
-
-    while (std::getline(inFile, line)) {
-        allLines.push_back(line);
-    }
-    inFile.close();
-    
-    std::string numberPrefix = number + ":";
-    
-
-    bool numberExists = false;
-    for (const auto& l : allLines) {
-        if (l.find(numberPrefix) == 0) { 
-            numberExists = true;
-            break;
-        }
-    }
-    
-    if (numberExists) {
-        return 0; 
-    }
-    
-
-    inFile.open(filename);
-    if (!inFile.is_open()) {
-        return 0;
-    }
-    
-    int currentLine = 1;
-    int addedLineNumber = 0;
-    std::string prevLine = "";
-    bool prevLineWasBlank = false;
-    int prevLineNumber = 0;
-    
-    while (std::getline(inFile, line)) {
-
-        bool isBlank = true;
-        for (char c : line) {
-            if (!std::isspace(static_cast<unsigned char>(c))) {
-                isBlank = false;
-                break;
-            }
-        }
-        
-
-        if (isBlank && prevLineWasBlank && addedLineNumber == 0) {
-
-            tempFile << numberPrefix << "\n";
-            tempFile << "l" << number << ":\n";
-            addedLineNumber = prevLineNumber;
-        } else if (prevLineWasBlank && !isBlank && addedLineNumber == 0) {
-            tempFile << "\n" << line << "\n";
-        } else {
-            tempFile << line << "\n";
-        }
-        
-        prevLine = line;
-        prevLineWasBlank = isBlank;
-        prevLineNumber = currentLine;
-        currentLine++;
-    }
-
-    if (prevLineWasBlank && addedLineNumber == 0) {
-        
-        inFile.clear();
-        inFile.seekg(0);
-        
-        std::vector<std::string> lines;
-        while (std::getline(inFile, line)) {
-            lines.push_back(line);
-        }
-        
-        if (lines.size() >= 2) {
-            bool lastLineBlank = true;
-            bool secondLastLineBlank = true;
-            
-            for (char c : lines[lines.size() - 1]) {
-                if (!std::isspace(static_cast<unsigned char>(c))) {
-                    lastLineBlank = false;
-                    break;
-                }
-            }
-            
-            for (char c : lines[lines.size() - 2]) {
-                if (!std::isspace(static_cast<unsigned char>(c))) {
-                    secondLastLineBlank = false;
-                    break;
-                }
-            }
-            
-            if (lastLineBlank && secondLastLineBlank) {
-
-                inFile.close();
-                tempFile.close();
-                
-                std::ifstream inFile2(filename);
-                std::ofstream tempFile2("temp.txt");
-                
-                for (size_t i = 0; i < lines.size() - 2; ++i) {
-                    tempFile2 << lines[i] << "\n";
-                }
-                tempFile2 << numberPrefix << "\n";
-                tempFile2 << "l" << number << ":\n";
-                addedLineNumber = lines.size() - 1;
-                
-                inFile2.close();
-                tempFile2.close();
-            }
-        }
-    }
-    
-    inFile.close();
-    tempFile.close();
-    
-    std::remove(filename.c_str());
-    std::rename("temp.txt", filename.c_str());
-    
-    return addedLineNumber;
-}
-
 bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::string& nameToDelete) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
@@ -356,7 +226,7 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     
     std::string line;
     int currentLine = 1;
-    std::string searchPattern = number + ":";
+    std::string searchPattern = "names in room "+ number + ":";
     
     while (std::getline(file, line)) {
         if (line.find(searchPattern) == 0) {
@@ -366,78 +236,6 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     }
     
     return 0;
-}
-
-bool ensureGalleryHeaderLine3(const std::string& filename) {
-    std::ifstream inFile(filename);
-    if (!inFile.is_open()) {
-        return false;
-    }
-
-    std::vector<std::string> lines;
-    std::string line;
-    while (std::getline(inFile, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back(); // handle CRLF
-        lines.push_back(line);
-    }
-    inFile.close();
-
-    while (lines.size() < 4) lines.push_back("");
-
-    auto trim_leading = [](const std::string& s) {
-        size_t i = s.find_first_not_of(" \t\r\n");
-        return (i == std::string::npos) ? std::string() : s.substr(i);
-    };
-
-    bool changed = false;
-    {
-        std::string third = lines[2];
-        std::string trimmed = trim_leading(third);
-
-        if (trimmed.rfind("G:", 0) == 0) {
-            std::string remainder = trimmed.substr(2);
-            std::string normalized = std::string("G:") + remainder;
-            if (lines[2] != normalized) {
-                lines[2] = normalized;
-                changed = true;
-            }
-        } else {
-            lines[2] = std::string("G:") + (trimmed.empty() ? std::string() : trimmed);
-            changed = true;
-        }
-    }
-
-    {
-        std::string fourth = lines[3];
-        std::string trimmed = trim_leading(fourth);
-
-        if (trimmed.rfind("lG:", 0) == 0) {
-            std::string remainder = trimmed.substr(3);
-            std::string normalized = std::string("lG:") + remainder;
-            if (lines[3] != normalized) {
-                lines[3] = normalized;
-                changed = true;
-            }
-        } else {
-            lines[3] = std::string("lG:") + (trimmed.empty() ? std::string() : trimmed);
-            changed = true;
-        }
-    }
-
-    if (!changed) return true;
-
-    std::ofstream outFile("temp.txt");
-    if (!outFile.is_open()) return false;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        outFile << lines[i];
-        if (i + 1 < lines.size()) outFile << '\n';
-    }
-    outFile.close();
-
-    std::remove(filename.c_str());
-    std::rename("temp.txt", filename.c_str());
-
-    return true;
 }
 
 void setUpFile(const std::string& filename) {
@@ -505,6 +303,24 @@ void setUpFile(const std::string& filename) {
     std::rename("temp.txt", filename.c_str());
 }
 
+int safeLog(Args arguments) {
+	//sanitize time
+	//timestamp
+	bool correctTimestamp = true;
+ 	if(arguments.timestamp.length() != 16)
+		correctTimestamp = false;
+	if(arguments.timestamp[4] != '-' || arguments.timestamp[7] != '-' || arguments.timestamp[13] != ':')
+		correctTimestamp = false;
+
+	if(correctTimestamp == false) {
+		std::cerr << "Timestamp format is wrong. Ex. 2023-11-03 15:28" << std::endl;
+		return 1;
+	}
+
+
+        return 0;
+}
+
 void addLog(Args arguments) {
         // open log file, make sure its not currently open 
             // someHow check the key == correct key, not sure how
@@ -521,20 +337,13 @@ void addLog(Args arguments) {
         // if -L==true, remove ",name" from roomNumber line
             // if -L == true but ",name" is not on roomNumber line, throw error 255
 	
-	//key check
-
-	// current probs:
-	//     G: and #: still not appearing at beginning of line
-	//     I don't think the l#: was showing either
-
-
         //add employeeName
 	std::string name = "0";
 
 	if(arguments.employeeName != "noEName")
 	    name = arguments.employeeName;
 	else
-        name = arguments.guestName;
+            name = arguments.guestName;
         
 
 
@@ -545,7 +354,7 @@ void addLog(Args arguments) {
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
             std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
-		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		//deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 
 	    }
 	    else {
@@ -557,9 +366,8 @@ void addLog(Args arguments) {
 	    int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
             bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
 	    if(exists) {
-		//add to room number line and remove from gallery line 
-	        appendToLine(arguments.logFileName, lineNumber + 1, name);
-		    deleteNameFromLine(arguments.logFileName, lineNumber, name);
+		//add to room number line and remove from gallery line
+		deleteNameFromLine(arguments.logFileName, lineNumber, name);
 	    }
 	    else {
 		std::cerr << "Error 255: Person is not in that room" << std::endl;
@@ -604,35 +412,35 @@ int main(int argc, char* argv[]) {
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
-            case 'T':
-                args.timestamp = optarg;
-                break;
-            case 'K':
-                args.key = optarg;
-                break;
-            case 'A':
-                args.arrival = true;
-                break;
-            case 'L':
-                args.leaving = true;
-                break;
-            case 'R':
-                args.roomNumber = optarg;
-                break;
-            case 'E':
-                args.employeeName = optarg;
-                break;
-            case 'G':
-                args.guestName = optarg;
-                break;
-            case 'h':
-                usage(argv[0]);
-                return 0;
-            case '?':
-            default:
-                usage(argv[0]);
-                return 1;
-        }
+        case 'T':
+            args.timestamp = std::string(optarg).substr(0, 16);
+            break;
+        case 'K':
+            args.key = std::string(optarg).substr(0, 255);
+            break;
+        case 'R':
+            args.roomNumber = std::string(optarg).substr(0, 3);
+            break;
+        case 'E':
+            args.employeeName = std::string(optarg).substr(0, 127);
+            break;
+        case 'G':
+            args.guestName = std::string(optarg).substr(0, 127);
+            break;
+        case 'A':
+            args.arrival = true;
+            break;
+        case 'L':
+            args.leaving = true;
+            break;
+        case 'h':
+            usage(argv[0]);
+            return 0;
+        case '?':
+        default:
+            usage(argv[0]);
+            return 1;
+    }
     }
     // add checks to make sure only allowable usage, currently will result in some errors if improper inputs
     // ex: make sure -R is always followed buy <roomNumber
@@ -648,9 +456,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    //Make sure log file if empty line 3 contains a G: before it.
-    
-    //ensureGalleryHeaderLine3(args.logFileName);
     setUpFile(args.logFileName);
 
     // Require key
@@ -674,6 +479,7 @@ int main(int argc, char* argv[]) {
 
     //add info to logfile, make sure things are correct.
     args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "");
+    int pass = safeLog(args);
     addLog(args);
 
     // Example debug output
