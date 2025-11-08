@@ -249,21 +249,19 @@ void setUpFile(const std::string& filename) {
     std::vector<std::string> allLines;
     std::string line;
     
-    // Read ALL lines from the original file first
+
     while (std::getline(inFile, line)) {
         allLines.push_back(line);
     }
     inFile.close();
 
     int currentLine = 1;
- 
-    // Process only the first ROOM_NUMBER_COUNT lines
     while (currentLine < ROOM_NUMBER_COUNT) {
         if (currentLine - 1 < allLines.size()) {
-            // We have an existing line - use it
+
             line = allLines[currentLine - 1];
         } else {
-            // We need to create a new line
+
             line = "";
         }
 
@@ -293,7 +291,6 @@ void setUpFile(const std::string& filename) {
         ++currentLine;
     }
 
-    // Now write any remaining lines that were beyond ROOM_NUMBER_COUNT
     for (size_t i = ROOM_NUMBER_COUNT - 1; i < allLines.size(); i++) {
         tempFile << allLines[i] << '\n';
     }

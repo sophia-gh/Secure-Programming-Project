@@ -2,6 +2,11 @@
 #include <string>
 #include <unistd.h> // getopt on POSIX
 #include <cstdlib>
+#include <vector>
+#include <fstream>
+#include <map>
+#include <algorithm>
+#include <sstream>
 
 // allowable options:-K <key> -S -R <roomNumber> (-E <employeeName> | -G <guestName>) logFileName
 struct Args {
@@ -25,12 +30,153 @@ void usage(const char* prog) {
               << "  -h    show this help\n";
 }
 
-void printGalleryState(){
+void printGalleryState(Args arguments){
     //print log state
+    std::ifstream logFile(arguments.logFileName);
+    if (!logFile.is_open()) {
+        std::cerr << "Error: Could not open log file " << arguments.logFileName << std::endl;
+        return;
+    }
+
+    std::string employeesInGallery;
+    std::string guestsInGallery;
+    std::map<int, std::vector<std::string>> roomOccupants;
+
+    std::string line;
+    while (std::getline(logFile, line)) {
+
+        size_t colonPos = line.find(':');
+        if (colonPos == std::string::npos) continue;
+
+        std::string prefix = line.substr(0, colonPos);
+        std::string namesStr = line.substr(colonPos + 1);
+
+
+        if (prefix == "employees in gallery line") {
+            employeesInGallery = namesStr;
+        }
+
+        else if (prefix == "guests in gallery line") {
+            guestsInGallery = namesStr;
+        }
+
+        else if (prefix.find("names in room") != std::string::npos) {
+
+            std::string roomStr = prefix.substr(13);
+            int roomNumber = std::stoi(roomStr);
+            
+
+            if (!namesStr.empty()) {
+                std::vector<std::string> names;
+                std::stringstream ss(namesStr);
+                std::string name;
+                
+                while (std::getline(ss, name, ',')) {
+                    if (!name.empty()) {
+                        names.push_back(name);
+                    }
+                }
+                
+                // Sort names alphabetically
+                std::sort(names.begin(), names.end());
+                roomOccupants[roomNumber] = names;
+            }
+        }
+    }
+
+    logFile.close();
+
+
+    std::cout << employeesInGallery << std::endl;
+
+
+    std::cout << guestsInGallery << std::endl;
+
+
+    for (const auto& [roomNumber, names] : roomOccupants) {
+        std::cout << roomNumber << ": ";
+        
+
+        for (size_t i = 0; i < names.size(); ++i) {
+            std::cout << names[i];
+            if (i < names.size() - 1) {
+                std::cout << ",";
+            }
+        }
+        std::cout << std::endl;
+    }
 }
 
-void printRoomEnteredByEmployeeOrGuest(){
-    //yeah print that stuff idk >:3
+void printRoomEnteredByEmployeeOrGuest(Args arguments){
+        // Validate that either -E or -G is specified
+    if (arguments.employeeName == "noEName" && arguments.guestName == "noGName") {
+        std::cerr << "Error: Either -E or -G must be specified with -R" << std::endl;
+        return;
+    }
+
+    std::string targetName;
+    if (arguments.employeeName != "noEName") {
+        targetName = arguments.employeeName;
+    } else {
+        targetName = arguments.guestName;
+    }
+
+    std::ifstream logFile(arguments.logFileName);
+    if (!logFile.is_open()) {
+        std::cerr << "Error: Could not open log file " << arguments.logFileName << std::endl;
+        return;
+    }
+
+    std::vector<int> roomsEntered;
+    std::string line;
+
+    while (std::getline(logFile, line)) {
+        // Find the colon separator
+        size_t colonPos = line.find(':');
+        if (colonPos == std::string::npos) continue;
+
+        std::string prefix = line.substr(0, colonPos);
+        std::string namesStr = line.substr(colonPos + 1);
+
+        if (prefix.find("names in room") != std::string::npos) {
+
+            std::string roomStr = prefix.substr(13); 
+            int roomNumber = std::stoi(roomStr);
+            
+
+            if (!namesStr.empty()) {
+                std::stringstream ss(namesStr);
+                std::string name;
+                bool found = false;
+                
+                while (std::getline(ss, name, ',')) {
+                    if (name == targetName) {
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (found) {
+                    roomsEntered.push_back(roomNumber);
+                }
+            }
+        }
+    }
+
+    logFile.close();
+
+    // Print rooms in chronological order (as they appear in the log)
+    if (roomsEntered.empty()) {
+        std::cout << std::endl; // Print empty line if no rooms found
+    } else {
+        for (size_t i = 0; i < roomsEntered.size(); ++i) {
+            std::cout << roomsEntered[i];
+            if (i < roomsEntered.size() - 1) {
+                std::cout << ",";
+            }
+        }
+        std::cout << std::endl;
+    }
 }
 
 int main(int argc, char* argv[]){
@@ -92,11 +238,13 @@ int main(int argc, char* argv[]){
 
     //if args.state == true, print state
     //key is verified
-    printGalleryState(); 
+    if(args.state == true)
+	    printGalleryState(args); 
 
     //if args.state == false; 
     //if args.roomNumber and employee/guest name given correctly
-    printRoomEnteredByEmployeeOrGuest();
+    if(args.state == false)
+	    printRoomEnteredByEmployeeOrGuest(args);
 
     // Example debug output
     std::cout << "Parsed arguments:\n";
