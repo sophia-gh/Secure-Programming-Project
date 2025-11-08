@@ -347,7 +347,7 @@ void addLog(Args arguments) {
 	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
             bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
 	    if(exists) {
-		//add to room number line and remove from gallery line 
+		//add to room number line 
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
             std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
@@ -372,7 +372,19 @@ void addLog(Args arguments) {
 	}
 	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
             bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+	    int inRoom = -1;
+
+	    //Checking if they are also in a room
+	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
+	        if(stringExistsInLine(arguments.logFileName, i, name))
+			inRoom = i;
+			
+	    }
 	    if(exists) {
+		// If they are in that room (not -1) then remove them
+		if(inRoom != -1)
+			deleteNameFromLine(arguments.logFileName, inRoom, name);
+		deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
 		deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
 		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 	    }
@@ -381,7 +393,7 @@ void addLog(Args arguments) {
 	    }
 	}
         
-	// DO TIMESTAMP
+
 	if(arguments.employeeName != "noEName" && arguments.arrival) {
 
 	    if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) {
@@ -393,8 +405,9 @@ void addLog(Args arguments) {
             if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
 	        appendToLine(arguments.logFileName, GUEST_LINE, name);
 
-	if(arguments.arrival && arguments.roomNumber == "noRoomNumber") 
-            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+	if(arguments.arrival && arguments.roomNumber == "noRoomNumber")
+            if(!stringExistsInLine(arguments.logFileName, GALLERY_LINE, name))
+		appendToLine(arguments.logFileName, GALLERY_LINE, name);
 
 
         appendLineToFile(arguments.logFileName, arguments.fullCommand);
