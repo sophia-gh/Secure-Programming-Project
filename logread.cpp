@@ -23,8 +23,8 @@ void usage(const char* prog) {
               << " print gallery state:                    -K <key> -S <logfileName>\n" 
               << " print list of people in specified room: -K <key> -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
               << "  -K <key>\n"
-              << "  -S \n"
-              << "  -R <room> (optional)(must be followed by -E OR -G) \n"
+              << "  -S\n"
+              << "  -R <room> (optional)(must be followed by -E OR -G)\n"
               << "  -E <employee name> (optional)\n"
               << "  -G <guest name> (optional)\n"
               << "  -h    show this help\n";
