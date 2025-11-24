@@ -179,7 +179,6 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
                 prefix = line.substr(0, colonPos + 1);
                 rest = line.substr(colonPos + 1);
             } else {
-
                 prefix.clear();
                 rest = line;
             }
@@ -204,7 +203,11 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
                     tempFile << kept[i];
                 }
             }
-            tempFile << '\n';
+            if(currentLine <= GALLERY_LINE) {
+                tempFile << ",\n";
+            } else {
+                tempFile << '\n';
+            }
         } else {
             tempFile << line << '\n';
         }
@@ -257,13 +260,11 @@ void setUpFile(const std::string& filename) {
     }
     inFile.close();
 
-    int currentLine = 1;
+    size_t currentLine = 1;
     while (currentLine < ROOM_NUMBER_COUNT) {
         if (currentLine - 1 < allLines.size()) {
-
             line = allLines[currentLine - 1];
         } else {
-
             line = "";
         }
 
@@ -388,7 +389,12 @@ void addLog(Args arguments) {
 
 
 	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
-        bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+        bool exists = false;
+        if(arguments.employeeName != "noEName") {
+            exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name);
+        } else {
+            exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, name);
+        }
 	    if(exists) {
 		//add to room number line 
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
@@ -548,17 +554,12 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: -A and -L are mutually exclusive\n";
         usage(argv[0]);
         return 1;
-    } else if(args.leaving) {
-        //logread -S given log
-        //check for given name and room number
-        //make sure there is an entry with -A -R <roomNumber> 
-        //if not print error (log state does not align: name never entered room)
     }
 
     // Validate input to program, closes if incorrect.
     safeLog(args);
     // Add info to log
-    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.employeeName != "noEName" ? args.employeeName : args.guestName) + " " 
+    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.employeeName != "noEName" ? "Employee " + args.employeeName : "Guest " + args.guestName) + " " 
                         + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "") + " " + (args.roomNumber != "noRoomNumber" ? "room " + args.roomNumber : "gallery");
     addLog(args);
 
