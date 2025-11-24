@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <unistd.h> // getopt on POSIX
+#include <ctime> // for timestamp
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
@@ -27,8 +28,7 @@ struct Args {
 
 void usage(const char* prog) {
     std::cerr << "Usage: " << prog
-              << " -T <timestamp> -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>\n"
-              << "  -T <timestamp> yyyy-mm-dd (ex. '2023-11-03')\n"
+              << "  -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>\n"
               << "  -K <key>\n"
               << "  -A    arrival (mutually exclusive with -L)\n"
               << "  -L    leaving (mutually exclusive with -A) (must be in room to leave)\n"
@@ -92,7 +92,7 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
     }
     inFile.close();
     
-    std::cout << allLines.back() << std::endl;
+    //std::cout << allLines.back() << std::endl;
     allLines.push_back(lineToAppend);
     
     // Write all lines back to temp file
@@ -304,25 +304,6 @@ void setUpFile(const std::string& filename) {
 
 // Input validation for applicable arguments
 void safeLog(Args arguments) {
-	// Timestamp Input Check
-    // Correct: "yyyy-mm-dd"
-    bool timestampCorrect = true;
-	if(arguments.timestamp.length() != 10) {
-        timestampCorrect = false;
-    } else if(arguments.timestamp[4] != '-' || arguments.timestamp[7] != '-') {
-        timestampCorrect = false;
-    }
-    for(size_t i = 0; i < arguments.timestamp.size(); ++i) {
-        if(i == 4 || i == 7) continue;
-        // Make sure numeric part of timestamp consists only of digits.
-        if(!std::isdigit(arguments.timestamp[i])) {
-            timestampCorrect = false;
-        }
-    }
-    if(!timestampCorrect) {
-        std::cerr << "Incorrectly formatted timestamp. Correct usage: yyyy-mm-dd (ex: '2023-11-23')" << std::endl;
-        exit(1);
-    }
 
     // Room Number Input Check
     // Must be 25 or less (maximum of 25 rooms)
@@ -362,8 +343,6 @@ void safeLog(Args arguments) {
     } else {
         name = arguments.guestName;
     }
-
-    std::cout << name << std::endl;
 
     bool nameCorrect = true;
     std::string invalidNameCharacters = "1234567890_~`\";:/<>,!@#$%^&*()+=|\\?\n";
@@ -413,12 +392,18 @@ void addLog(Args arguments) {
 	    if(exists) {
 		//add to room number line 
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
-            std::cout << "Room number line: " << lineNumber << std::endl;
+            //std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
-		//deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+            if(arguments.employeeName != "noEName") {
+                deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+            } else {
+                deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
+            }
 	    }
 	    else {
 		    std::cerr << "Person is not in the gallery" << std::endl;
+            exit(1);
 	    }
 	}
 
@@ -426,11 +411,18 @@ void addLog(Args arguments) {
 	    int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
         bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
 	    if(exists) {
-		//add to room number line and remove from gallery line
-		deleteNameFromLine(arguments.logFileName, lineNumber, name);
+		    //remove from room line and add to gallery line
+		    deleteNameFromLine(arguments.logFileName, lineNumber, name);
+            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+            if(arguments.employeeName != "noEName") {
+                appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
+            } else {
+                appendToLine(arguments.logFileName, GUEST_LINE, name);
+            }
 	    }
 	    else {
-		std::cerr << "Error 255: Person is not in that room" << std::endl;
+		    std::cerr << "Error 255: Person is not in that room" << std::endl;
+            exit(1);
 	    }
 	}
 	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
@@ -445,22 +437,26 @@ void addLog(Args arguments) {
 	    }
 	    if(exists) {
 		// If they are in that room (not -1) then remove them
-		if(inRoom != -1)
-			deleteNameFromLine(arguments.logFileName, inRoom, name);
-		deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
-		deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
-		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		    if(inRoom != -1)
+		    	deleteNameFromLine(arguments.logFileName, inRoom, name);
+                if(arguments.employeeName != "noEName") {
+                    deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+                } else {
+                    deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
+                }
+		        deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 	    }
 	    else {
-		std::cerr << "Error 255: Person is not in gallery room" << std::endl;
+		    std::cerr << "Error 255: Person is not in gallery room" << std::endl;
+            exit(1);
 	    }
 	}
         
 
-	if(arguments.employeeName != "noEName" && arguments.arrival) {
+	if(arguments.employeeName != "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
         if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name))
 		    appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
-	} else if(arguments.employeeName == "noEName" && arguments.arrival){
+	} else if(arguments.employeeName == "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
         if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
 	        appendToLine(arguments.logFileName, GUEST_LINE, name);
     }
@@ -475,15 +471,16 @@ void addLog(Args arguments) {
 int main(int argc, char* argv[]) {
     Args args;
     int opt;
+    if(argc == 1) {
+        usage(argv[0]);
+        return(1);
+    }
 
-    // options that take arguments: T, K, R, E, G  (A and L are flags)
-    const char* optstring = "T:K:ALR:E:G:h";
+    // options that take arguments: K, R, E, G  (A and L are flags)
+    const char* optstring = "K:ALR:E:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
-        case 'T':
-            args.timestamp = std::string(optarg).substr(0, 16);
-            break;
         case 'K':
             args.key = std::string(optarg).substr(0, 255);
             break;
@@ -511,8 +508,20 @@ int main(int argc, char* argv[]) {
             return 1;
     }
     }
+    // Adds timestamp of current time in
+    // format: 'yyyy-mm-dd/hh:mm:ss'
+    std::time_t rawtime;
+    std::time(&rawtime);
+
+    std::tm* timeinfo = std::localtime(&rawtime);
+    
+    char buffer[80];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d/%H:%M:%S", timeinfo);
+    
+    args.timestamp = std::string(buffer);
+
     // add checks to make sure only allowable usage, currently will result in some errors if improper inputs
-    // ex: make sure -R is always followed buy <roomNumber
+    // ex: make sure -R is always followed buy <roomNumber>
     // make sure -E and -G are always followed by <name>
     // must include -K <key>  
 
@@ -549,7 +558,8 @@ int main(int argc, char* argv[]) {
     // Validate input to program, closes if incorrect.
     safeLog(args);
     // Add info to log
-    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "");
+    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.employeeName != "noEName" ? args.employeeName : args.guestName) + " " 
+                        + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "") + " " + (args.roomNumber != "noRoomNumber" ? "room " + args.roomNumber : "gallery");
     addLog(args);
 
     // Example debug output
