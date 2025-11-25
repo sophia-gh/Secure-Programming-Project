@@ -4,7 +4,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 LDFLAGS :=
 
 #directories
-SRCS = logappend.cpp logread.cpp
+SRCS = logappend.cpp logread.cpp 
 OBJS = $(SRCS:.cpp=.o)
 TARGETS = logappend logread 
 .PHONY: all clean
