@@ -5,6 +5,8 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
+#include "keyAuthentication.h"
+
 
 #define EMPLOYEE_LINE 1
 #define GUEST_LINE 2
@@ -466,7 +468,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    setUpFile(args.logFileName);
+    
 
     // Require key
     if (args.key == "noKey" || args.key.empty()) {
@@ -474,7 +476,14 @@ int main(int argc, char* argv[]) {
         usage(argv[0]);
         return 1;
     }
+    if (!validateKey(args.key)) {
+        std::cerr << "Error: invalid key\n";
+        return 1;
+    }
 
+    //only after key is validated
+    setUpFile(args.logFileName);
+    
     // Enforce mutually exclusive flags -A and -L
     if (args.arrival && args.leaving) {
         std::cerr << "Error: -A and -L are mutually exclusive\n";

@@ -7,6 +7,7 @@
 #include <map>
 #include <algorithm>
 #include <sstream>
+#include "keyAuthentication.h"
 
 // allowable options:-K <key> -S -R <roomNumber> (-E <employeeName> | -G <guestName>) logFileName
 struct Args {
@@ -233,6 +234,10 @@ int main(int argc, char* argv[]){
     if (args.key == "noKey" || args.key.empty()) {
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
+        return 1;
+    }
+    if (!validateKey(args.key)) {
+        std::cerr << "Error: invalid key\n";
         return 1;
     }
 

@@ -3,19 +3,25 @@ CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 LDFLAGS :=
 
-#directories
-SRCS = logappend.cpp logread.cpp 
+# source files
+SRCS = logappend.cpp logread.cpp authenticationHash.h
+BCRYPT_SRCS = external/bcrypt/bcrypt.cpp external/bcrypt/blowfish.cpp
+
+# object files
 OBJS = $(SRCS:.cpp=.o)
-TARGETS = logappend logread 
+BCRYPT_OBJS = $(BCRYPT_SRCS:.cpp=.o)
+
+# targets ------------------------------------------------------------------
+TARGETS = logappend logread
 .PHONY: all clean
 
 all: $(TARGETS)
 
 #make executables individually
-logappend: logappend.o
+logappend: logappend.o  $(BCRYPT_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
-logread: logread.o
+logread: logread.o $(BCRYPT_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 #make object files
@@ -24,6 +30,7 @@ logread: logread.o
 
 clean:
 	rm -f $(OBJS) $(TARGETS)
+	rm -f external/bcrypt/*.o
 
 #testing
 TESTS := $(wildcard testsuite/*.sh)
