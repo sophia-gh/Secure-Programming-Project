@@ -1,3 +1,17 @@
+/*
+*    logapend.cpp
+*    
+*    Parses command line arguments in the format: ./logappend -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>
+*    Securely appends the appropriate information to the appropriate lines in the log file.
+*    Requires authentication key to proceed.
+*    
+*    Log File Format:
+*    Line 1: employees in gallery line: names of all employees currently in any room in the gallery, comma separated
+*    Line 2: guests in gallery line: names of all guests currently in any room in the gallery, comma separated
+*    Line 3: gallery line: combined names of all employees and guests currently in any room in the gallery, comma separated
+*    Line 4-28: names in room <room number>: combined names of all employees and guests currently in rooms 1-25, comma separated
+*/
+
 #include <iostream>
 #include <string>
 #include <unistd.h> // getopt on POSIX
@@ -6,8 +20,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <vector>
-#include <sstream>
-#include "keyAuthentication.h"
+#include <sstream> 
+#include "keyAuthentication.h" // containes validateKey function and the stored hash of the system authentication key
 
 
 #define EMPLOYEE_LINE 1
@@ -15,7 +29,7 @@
 #define GALLERY_LINE 3
 #define ROOM_NUMBER_COUNT 29
 
-
+// Structure to hold parsed command line arguments, default values assigned
 struct Args {
     std::string timestamp = "0";
     std::string key = "noKey";
@@ -29,16 +43,18 @@ struct Args {
 };
 
 void usage(const char* prog) {
+    std::cerr << "Gallery Log Append: Appends arrival and leaving information to the specified gallery log file. Requires authentication key.\n";
     std::cerr << "Usage: " << prog
-              << "  -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>\n"
-              << "  -K <key>\n"
-              << "  -A    arrival (mutually exclusive with -L)\n"
-              << "  -L    leaving (mutually exclusive with -A) (must be in room to leave)\n"
-              << "  -R <room> (max: 25) (must be in gallery to arrive in room) \n"
-              << "  -E <employee name> (mutually exclusive with -G)\n"
-              << "  -G <guest name> (mutually exclusive with -G)\n"
-              << "        (Guest/Employee name must not contain numbers or special characters.)\n"
-              << "  -h    show this help" << std::endl;
+              << " -K <key> (-A | -L) -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
+              << "Options:\n"
+              << "       -K <key>            TEXT: authentication key to grant access to the log\n"
+              << "       -A                  arrival (mutually exclusive with -L)\n"
+              << "       -L                  leaving (mutually exclusive with -A) (must be in room to leave)\n"
+              << "       -R <room number>    TEXT: (max: 25) (must be in gallery to arrive in room, must be in room to leave) \n"
+              << "       -E <employee name>  TEXT: name (mutually exclusive with -G)\n"
+              << "       -G <guest name>     TEXT: name (mutually exclusive with -E)\n"
+              << "                           (Guest/Employee name must not contain numbers or special characters.)\n"
+              << "       -h                  show this help message\n\n";
 }
 
 bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
@@ -549,10 +565,12 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
         return 1;
-    }
-    if (!validateKey(args.key)) {
+    } else if (!validateKey(args.key)) {
         std::cerr << "Error: invalid key\n";
         return 1;
+    } else {
+        // means key is valid, overwrite key in args for security
+        args.key = "*****";
     }
 
     //only after key is validated

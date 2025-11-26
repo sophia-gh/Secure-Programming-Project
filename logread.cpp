@@ -20,9 +20,10 @@ struct Args {
 };
 
 void usage(const char* prog) {
+    std::cerr << "Gallery Log Read: Prints the current state of the specified log file. Requires authentication key.\n";
     std::cerr << "Usage: " << prog
-              << " print gallery state:                    -K <key> -S <logfileName>\n" 
-              << " print list of people in specified room: -K <key> -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
+              << " print gallery state:                              -K <key> -S <logfileName>\n" 
+              << " print list of people currently in specified room: -K <key> -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
               << "  -K <key>\n"
               << "  -S\n"
               << "  -R <room> (optional)(must be followed by -E OR -G)\n"
@@ -231,14 +232,17 @@ int main(int argc, char* argv[]){
     }
 
     // Require key
+    // Require key
     if (args.key == "noKey" || args.key.empty()) {
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
         return 1;
-    }
-    if (!validateKey(args.key)) {
+    } else if (!validateKey(args.key)) {
         std::cerr << "Error: invalid key\n";
         return 1;
+    } else {
+        // means key is valid, overwrite key in args for security
+        args.key = "*****";
     }
 
     //if args.state == true, print state

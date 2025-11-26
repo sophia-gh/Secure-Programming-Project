@@ -1,3 +1,8 @@
+/*
+    This files stores the hash for the system key and the function to validate it. 
+*/
+
+
 #include "external/bcrypt/bcrypt.h"
 #include <string>
 
