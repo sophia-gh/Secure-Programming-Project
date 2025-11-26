@@ -39,3 +39,9 @@ Done Testing!
 View Output of each test in test_output.txt
 ```
 The test_output.txt file conatins the output of each test, these outputs will explain why failing tests have failed. 
+
+# 3 clean with make file
+```cmd
+    make clean
+```
+*this removes all excutables and objects created with the 'make test' or 'make command' command*

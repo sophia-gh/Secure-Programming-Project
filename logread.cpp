@@ -185,13 +185,18 @@ int main(int argc, char* argv[]){
     Args args;
     int opt;
 
+    bool keyIsAuthenticated = false;
+
     // options that take arguments: K, R, E, G (S is a flag)
     const char* optstring = "K:SR:E:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
             case 'K':
-                args.key = optarg;
+                //dont want to store key here
+                keyIsAuthenticated = validateKey(std::string(optarg).substr(0, 255));
+                if(keyIsAuthenticated){ args.key ="*****"; } //if key is authenticated, overwrite key in args for security, else leave as noKey
+                else {args.key = "invalidKey";}
                 break;
             case 'S':
                 args.state = true; 
@@ -232,17 +237,15 @@ int main(int argc, char* argv[]){
     }
 
     // Require key
-    // Require key
     if (args.key == "noKey" || args.key.empty()) {
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
         return 1;
-    } else if (!validateKey(args.key)) {
+    } else if (!keyIsAuthenticated && args.key == "invalidKey") {
         std::cerr << "Error: invalid key\n";
         return 1;
     } else {
-        // means key is valid, overwrite key in args for security
-        args.key = "*****";
+        // means key is valid
     }
 
     //if args.state == true, print state

@@ -500,13 +500,17 @@ int main(int argc, char* argv[]) {
         return(1);
     }
 
+    bool keyIsAuthenticated = false;
     // options that take arguments: K, R, E, G  (A and L are flags)
     const char* optstring = "K:ALR:E:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
         case 'K':
-            args.key = std::string(optarg).substr(0, 255);
+            //dont want to store key here
+            keyIsAuthenticated = validateKey(std::string(optarg).substr(0, 255));
+            if(keyIsAuthenticated){ args.key ="*****"; } //if key is valid, overwrite key in args for security, else leave as noKey
+            else {args.key = "invalidKey";}
             break;
         case 'R':
             args.roomNumber = std::string(optarg).substr(0, 3);
@@ -561,16 +565,15 @@ int main(int argc, char* argv[]) {
     
 
     // Require key
-    if (args.key == "noKey" || args.key.empty()) {
+    if (args.key == "noKey" || args.key.empty()) {         //if key is somehow never overwritten, it means no key was given
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
         return 1;
-    } else if (!validateKey(args.key)) {
+    } else if (!keyIsAuthenticated && args.key == "invalidKey") {  
         std::cerr << "Error: invalid key\n";
         return 1;
     } else {
-        // means key is valid, overwrite key in args for security
-        args.key = "*****";
+        // means key is valid
     }
 
     //only after key is validated
