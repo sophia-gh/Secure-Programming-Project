@@ -1,0 +1,33 @@
+employees in gallery line:Jeremiah,Kenny,Jim,
+guests in gallery line:
+names in gallery line:Jeremiah,Kenny,Jim,
+names in room 1:
+names in room 2:
+names in room 3:
+names in room 4:
+names in room 5:
+names in room 6:
+names in room 7:
+names in room 8:
+names in room 9:
+names in room 10:
+names in room 11:
+names in room 12:
+names in room 13:
+names in room 14:
+names in room 15:
+names in room 16:
+names in room 17:
+names in room 18:
+names in room 19:
+names in room 20:
+names in room 21:
+names in room 22:
+names in room 23:
+names in room 24:
+names in room 25:
+2025-11-24/23:28:44 ./logappend Employee Jim arrival gallery
+2025-11-24/23:28:48 ./logappend Employee Jeremiah arrival gallery
+2025-11-24/23:28:53 ./logappend Employee Kenny arrival gallery
+2025-11-24/23:29:20 ./logappend Employee Jim arrival room 12
+2025-11-24/23:29:27 ./logappend Employee Jim leaving room 12
