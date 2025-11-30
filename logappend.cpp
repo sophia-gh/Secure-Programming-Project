@@ -396,41 +396,58 @@ void addLog(Args arguments) {
         // if -L==true, remove ",name" from roomNumber line
             // if -L == true but ",name" is not on roomNumber line, throw error 255
 	
-        //add employeeName
+    //Store name based on whether employee or guest in variable 'name'
 	std::string name = "0";
+	if(arguments.employeeName != "noEName") { name = arguments.employeeName; } 
+    else { name = arguments.guestName; }
 
-	if(arguments.employeeName != "noEName") {
-	    name = arguments.employeeName;
-    } else {
-        name = arguments.guestName;
-    }
-
-
-	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
+    // if using: ./logappend -K <key> -A -R <number> (-E|-G) <Name> <logFileName> 
+    // user must be in the gallery to arrive in room <number>
+    // user can arrive in another room from current room without
+	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {  // user is arriving in a specific room
         bool exists = false;
-        if(arguments.employeeName != "noEName") {
-            exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name);
-        } else {
-            exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, name);
+        int inRoom = -1;
+        // look for name in either employee or guest gallery line
+        if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name); } 
+        else { exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, name); }
+        
+        // check to see if they are in a room other than the gallery room
+	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
+	        if(stringExistsInLine(arguments.logFileName, i, name)){ 
+                inRoom = i; 
+                exists = true;
+                break;
+            }
         }
+        
+
+        // if a user is in either the employee or guest gallery line, then they are in the gallery room or a specific room
+        // if a user is in a specific room already, they can move to another room directly
 	    if(exists) {
-		//add to room number line 
+            // if name is in a numbered room already, remove from that room before adding to new room
+            if(inRoom != -1) { deleteNameFromLine(arguments.logFileName, inRoom, name); }
+            
+            // add name to new room line
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
-            //std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
+            
+            // remove name from gallery and employee or guest line
 		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
             if(arguments.employeeName != "noEName") {
                 deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
             } else {
                 deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
-            }
-	    }
+            } 
+        }
 	    else {
 		    std::cerr << "Person is not in the gallery" << std::endl;
             exit(1);
 	    }
 	}
 
+    // if using ./logappend -K <key> -L -R <number> (-E|-G) <Name> <logFileName>
+    // user is leaving a specific room <number>
+    // user will be added back to gallery line and employee or guest line
 	if(arguments.leaving && arguments.roomNumber != "noRoomNumber") {
 	    int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
         bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
@@ -450,15 +467,35 @@ void addLog(Args arguments) {
 	    }
 	}
 	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
+        // user is leaving the gallery entirely 
+        
+        // check that name is in the gallery line
         bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
-	    int inRoom = -1;
+        // make sure the name is also in either employee or guest line, and that the wrong tag isnt being used for the wrong type of person
+        // ex: no -E guestName or -G employeeName
+        if(arguments.employeeName != "noEName") { 
+            if (stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) { exists = exists; } 
+            else {
+                std::cerr << "Error: Employee name not found in employee gallery line." << std::endl;
+                exit(1);
+            } 
+        } 
+        else {  
+            if (stringExistsInLine(arguments.logFileName, GUEST_LINE, name)) { exists = exists; }
+            else {
+                std::cerr << "Error: Guest name not found in guest gallery line." << std::endl;
+                exit(1);
+            }
+        }
 
 	    //Checking if they are also in a room
+        int inRoom = -1;
 	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
 	        if(stringExistsInLine(arguments.logFileName, i, name))
 			inRoom = i;
 			
 	    }
+
 	    if(exists) {
 		// If they are in that room (not -1) then remove them
 		    if(inRoom != -1)
@@ -476,7 +513,7 @@ void addLog(Args arguments) {
 	    }
 	}
         
-
+    // only add name to gallery and employee/guest line if the name does not already exist in those line
 	if(arguments.employeeName != "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
         if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name))
 		    appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
