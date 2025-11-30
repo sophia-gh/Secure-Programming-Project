@@ -6,8 +6,8 @@
 #include "external/bcrypt/bcrypt.h"
 #include <string>
 
-#ifndef AUTH_HASH
-#define AUTH_HASH 
+#ifndef GENERATED_HASH
+#define GENERATED_HASH
 const std::string generatedHash = "$2a$12$KctpkL51wGqtlQQpFut0ZuxZkp/d/Wr08BYepLsCZyi5g7vfNhGsS";
 #endif
 

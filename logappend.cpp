@@ -110,7 +110,6 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
     }
     inFile.close();
     
-    //std::cout << allLines.back() << std::endl;
     allLines.push_back(lineToAppend);
     
     // Write all lines back to temp file
@@ -262,22 +261,42 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
 }
 
 void setUpFile(const std::string& filename) {
+    // attempt to open the given filename as 'inFile'
     std::ifstream inFile(filename);
-    std::ofstream tempFile("temp.txt");
 
-    if(!inFile.is_open() || !tempFile.is_open()) {
+    // if the given filename does not already exist, attempt to create it
+    if(!inFile.is_open()) {
+        std::ofstream createFile(filename);
+        if (!createFile) {
+            std::cerr << "Error: Could not create log file " << filename << "\n";
+            return;
+        }
+        createFile.close();
+        // attempt to open the newly created file for reading
+        inFile.open(filename);
+        if (!inFile.is_open()) {
+            std::cerr << "Error: Could not reopen log file " << filename << "\n";
+            return;
+        }
+    }
+
+    // open temporary file for writing
+    std::ofstream tempFile("temp.txt");
+    if(!tempFile.is_open()) {
+        std::cerr << "Error: Could not create temporary file for setup.\n";
         return;
     }
 
     std::vector<std::string> allLines;
     std::string line;
     
-
+    // Read all existing lines in inFile into vector
     while (std::getline(inFile, line)) {
         allLines.push_back(line);
     }
-    inFile.close();
+    inFile.close(); // close original file after reading
 
+    // write required lines to temp file if they do not already exist
     size_t currentLine = 1;
     while (currentLine < ROOM_NUMBER_COUNT) {
         if (currentLine - 1 < allLines.size()) {
@@ -315,8 +334,9 @@ void setUpFile(const std::string& filename) {
     for (size_t i = ROOM_NUMBER_COUNT - 1; i < allLines.size(); i++) {
         tempFile << allLines[i] << '\n';
     }
-
     tempFile.close();
+
+    // Replace original file with temporary file and name it to the original filename
     std::remove(filename.c_str());
     std::rename("temp.txt", filename.c_str());
 }
@@ -350,12 +370,13 @@ void safeLog(Args arguments) {
 
     // Employee / Guest Name Validation
     // Name cannot have numbers or special symbols in it
-
     // User can not provide both guest and employee name.
     if(arguments.employeeName != "noEName" && arguments.guestName != "noGName") {
         std::cerr << "Employee and Guest Name are mutually exclusive. Use '-h' for help." << std::endl;
         exit(1);
     }
+    
+    //store given name 
     std::string name = "";
     if(arguments.employeeName != "noEName") {
         name = arguments.employeeName;
@@ -364,6 +385,7 @@ void safeLog(Args arguments) {
     }
 
     bool nameCorrect = true;
+    //name must not inlude numbers or special characters
     std::string invalidNameCharacters = "1234567890_~`\";:/<>,!@#$%^&*()+=|\\?\n";
     for(size_t i = 0; i < name.size(); ++i) {
         for(size_t j = 0; j < invalidNameCharacters.size(); ++j) {
@@ -377,25 +399,9 @@ void safeLog(Args arguments) {
         std::cerr << "Invalid Employee / Guest Value. Name must not contain numbers or special characters." << std::endl;
         exit(1);
     }
-
 }
 
 void addLog(Args arguments) {
-        // open log file, make sure its not currently open 
-            // someHow check the key == correct key, not sure how
-        // put a bunch of if statements here to check if things are correct
-        //.... some things to do not necessarily in order \/\/\/
-        // add ",employeeName" to first line in file
-        // add ",guestName" to second line in file
-        // if roomNumber = no roomNumber
-            // add name to line that starts with G:, for gallery as a whole
-        //if -A - R <roomNumber> is given, make sure name is in the line that starts with G:, if it isnt print error 
-            // no one can arrive in a room without entering the gallery first
-        // find line that starts with roomNumber
-        // if -A==true, add ",name" to roomNumber line
-        // if -L==true, remove ",name" from roomNumber line
-            // if -L == true but ",name" is not on roomNumber line, throw error 255
-	
     //Store name based on whether employee or guest in variable 'name'
 	std::string name = "0";
 	if(arguments.employeeName != "noEName") { name = arguments.employeeName; } 
@@ -420,7 +426,6 @@ void addLog(Args arguments) {
             }
         }
         
-
         // if a user is in either the employee or guest gallery line, then they are in the gallery room or a specific room
         // if a user is in a specific room already, they can move to another room directly
 	    if(exists) {
@@ -462,7 +467,7 @@ void addLog(Args arguments) {
             }
 	    }
 	    else {
-		    std::cerr << "Error 255: Person is not in that room" << std::endl;
+		    std::cerr << "Error: Person is not in that room" << std::endl;
             exit(1);
 	    }
 	}
@@ -493,9 +498,9 @@ void addLog(Args arguments) {
 	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
 	        if(stringExistsInLine(arguments.logFileName, i, name))
 			inRoom = i;
-			
 	    }
 
+        // if name is in the gallery line and the -E and -G tag matches their type, move on to remove name from any other line/room it appears in
 	    if(exists) {
 		// If they are in that room (not -1) then remove them
 		    if(inRoom != -1)
@@ -525,7 +530,7 @@ void addLog(Args arguments) {
         if(!stringExistsInLine(arguments.logFileName, GALLERY_LINE, name))
 		    appendToLine(arguments.logFileName, GALLERY_LINE, name);
     }
-
+    // Finally, append the full command to the end of the log file for record keeping
     appendLineToFile(arguments.logFileName, arguments.fullCommand);
 }
 
@@ -539,15 +544,25 @@ int main(int argc, char* argv[]) {
 
     bool keyIsAuthenticated = false;
     // options that take arguments: K, R, E, G  (A and L are flags)
-    const char* optstring = "K:ALR:E:G:h";
+    // timestamp is auto generated but if a user supplies the -T argument an error message is shown
+    // -B batch file log append is not implemented
+    const char* optstring = "T:K:BALR:E:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
+        case 'B':
+            std::cerr << "Batch file log append is not implemented. Do not include -B argument.\n";
+            usage(argv[0]);
+            return 1;
+        case 'T':
+            std::cerr << "Timestamp is auto-generated. Do not include -T argument.\n";
+            usage(argv[0]);
+            return 1;
         case 'K':
             //dont want to store key here
             keyIsAuthenticated = validateKey(std::string(optarg).substr(0, 255));
             if(keyIsAuthenticated){ args.key ="*****"; } //if key is valid, overwrite key in args for security, else leave as noKey
-            else {args.key = "invalidKey";}
+            else {args.key = "invalidKey";} //makes sure that no invalid keys are stored as those inputs may be malicious, instead just store as invalidKey
             break;
         case 'R':
             args.roomNumber = std::string(optarg).substr(0, 3);
@@ -571,9 +586,10 @@ int main(int argc, char* argv[]) {
         default:
             usage(argv[0]);
             return 1;
+        }
     }
-    }
-    // Adds timestamp of current time in
+
+    // Generate timestamp of current time in
     // format: 'yyyy-mm-dd/hh:mm:ss'
     std::time_t rawtime;
     std::time(&rawtime);
@@ -584,11 +600,6 @@ int main(int argc, char* argv[]) {
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d/%H:%M:%S", timeinfo);
     
     args.timestamp = std::string(buffer);
-
-    // add checks to make sure only allowable usage, currently will result in some errors if improper inputs
-    // ex: make sure -R is always followed buy <roomNumber>
-    // make sure -E and -G are always followed by <name>
-    // must include -K <key>  
 
     // After options, expect a positional logFileName
     if (optind < argc) {
@@ -623,7 +634,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Validate input to program, closes if incorrect.
+    // Validate input to program, exits if incorrect.
     safeLog(args);
     // Add info to log
     args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.employeeName != "noEName" ? "Employee " + args.employeeName : "Guest " + args.guestName) + " " 
