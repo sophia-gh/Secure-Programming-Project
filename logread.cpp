@@ -9,11 +9,11 @@
 #include <sstream>
 #include "keyAuthentication.h"
 
-// allowable options:-K <key> -S -R <roomNumber> (-E <employeeName> | -G <guestName>) logFileName
+// allowable options:-K <key> -S -R (-E <employeeName> | -G <guestName>) logFileName
 struct Args {
     std::string key = "noKey";
     bool state = false;
-    std::string roomNumber = "noRoomNumber";
+    bool rooms = false;
     std::string employeeName = "noEName";
     std::string guestName = "noGName";
     std::string logFileName = "test.txt";
@@ -21,12 +21,12 @@ struct Args {
 
 void usage(const char* prog) {
     std::cerr << "Gallery Log Read: Prints the current state of the specified log file. Requires authentication key.\n";
-    std::cerr << "Usage: " << prog
+    std::cerr << "Usage: " << prog << "\n"
               << " print gallery state:                              -K <key> -S <logfileName>\n" 
-              << " print list of people currently in specified room: -K <key> -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
+              << " print room employee or guest is currently in:     -K <key> -R (-E <employeeName> | -G <guestName>) <logFileName>\n"
               << "  -K <key>\n"
               << "  -S\n"
-              << "  -R <room> (optional)(must be followed by -E OR -G)\n"
+              << "  -R (optional)(must be followed by -E OR -G)\n"
               << "  -E <employee name> (optional)\n"
               << "  -G <guest name> (optional)\n"
               << "  -h    show this help\n";
@@ -188,10 +188,15 @@ int main(int argc, char* argv[]){
     bool keyIsAuthenticated = false;
 
     // options that take arguments: K, R, E, G (S is a flag)
-    const char* optstring = "K:SR:E:G:h";
+    // -T is ignored as timestamp is auto-generated
+    const char* optstring = "T:K:SRE:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
+            case 'T':
+                std::cerr << "Timestamp is auto-generated. Do not include -T argument.\n";
+                usage(argv[0]);
+                return 1;
             case 'K':
                 //dont want to store key here
                 keyIsAuthenticated = validateKey(std::string(optarg).substr(0, 255));
@@ -202,7 +207,7 @@ int main(int argc, char* argv[]){
                 args.state = true; 
                 break; 
             case 'R':
-                args.roomNumber = optarg;
+                args.rooms = true;
                 break;
             case 'E':
                 args.employeeName = optarg;
@@ -219,13 +224,6 @@ int main(int argc, char* argv[]){
                 return 1;
         }
     }
-
-    // add checks to make sure only allowable usage, currently will result in some errors if improper inputs
-    // ex: make sure -R is always followed buy <roomNumber
-    // make sure -E and -G are always followed by <name>
-    // must include -K <key>
-    // if -S make sure no other arguments are given, must be [...] -S <logFileName>
-    // ect ....
 
     // After options, expect a positional logFileName
     if (optind < argc) {
@@ -254,7 +252,7 @@ int main(int argc, char* argv[]){
 	    printGalleryState(args); 
 
     //if args.state == false; 
-    //if args.roomNumber and employee/guest name given correctly
+    //if args.rooms and employee/guest name given correctly
     if(args.state == false)
 	    printRoomEnteredByEmployeeOrGuest(args);
 
@@ -262,7 +260,7 @@ int main(int argc, char* argv[]){
     std::cout << "Parsed arguments:\n";
     std::cout << "  key:          " << args.key << "\n";
     std::cout << "  state:      " << (args.state ? "yes" : "no") << "\n";
-    std::cout << "  roomNumber:   " << args.roomNumber << "\n";
+    std::cout << "  rooms:   " << (args.rooms ? "yes" : "no") << "\n";
     std::cout << "  employeeName: " << args.employeeName << "\n";
     std::cout << "  guestName:    " << args.guestName << "\n";
     std::cout << "  logFileName:  " << args.logFileName << "\n";
