@@ -2,8 +2,9 @@
 
 output=$(./logread -h 2>&1)
 expected="Gallery Log Read: Prints the current state of the specified log file. Requires authentication key.
-Usage: ./logread print gallery state:                              -K <key> -S <logfileName>
- print list of people currently in specified room: -K <key> -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>
+Usage: ./logread
+ print gallery state:                              -K <key> -S <logfileName>
+ print room employee or guest is currently in:     -K <key> -R (-E <employeeName> | -G <guestName>) <logFileName>
   -K <key>
   -S
   -R <room> (optional)(must be followed by -E OR -G)

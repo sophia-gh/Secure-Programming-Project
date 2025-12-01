@@ -31,7 +31,7 @@ void usage(const char* prog) {
               << " print room employee or guest is currently in:     -K <key> -R (-E <employeeName> | -G <guestName>) <logFileName>\n"
               << "  -K <key>\n"
               << "  -S\n"
-              << "  -R (optional)(must be followed by -E OR -G)\n"
+              << "  -R <room> (optional)(must be followed by -E OR -G)\n"
               << "  -E <employee name> (optional)\n"
               << "  -G <guest name> (optional)\n"
               << "  -h    show this help\n";
@@ -157,11 +157,14 @@ void printRoomEnteredByEmployeeOrGuest(Args arguments){
     else { exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, targetName); }
         
     // check to see if they are in a room other than the gallery room
-    for(int i = GALLERY_LINE+1; i < 30; ++i) {
-        if(stringExistsInLine(arguments.logFileName, i, targetName)){ 
-            inRoom = i - (GALLERY_LINE); // adjust room number to match actual room numbering
-            exists = true;
-            break;
+    // if they're not in the gallery
+    if(!exists) {
+        for(int i = GALLERY_LINE+1; i < 30; ++i) {
+            if(stringExistsInLine(arguments.logFileName, i, targetName)){ 
+                inRoom = i - (GALLERY_LINE); // adjust room number to match actual room numbering
+                exists = true;
+                break;
+            }
         }
     }
     if(exists && inRoom != -1){ std::cout << targetName << " is currently in Room: " << inRoom << std::endl; }
@@ -260,10 +263,10 @@ int main(int argc, char* argv[]){
                 args.rooms = true;
                 break;
             case 'E':
-                args.employeeName = optarg;
+                args.employeeName = std::string(optarg).substr(0, 127);
                 break;
             case 'G':
-                args.guestName = optarg;
+                args.guestName = std::string(optarg).substr(0, 127);
                 break;
             case 'h':
                 usage(argv[0]);

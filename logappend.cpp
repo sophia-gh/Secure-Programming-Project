@@ -206,7 +206,7 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
             while (std::getline(ss, field, ',')) {
                 std::string t = trim(field);
                 if (t.empty()) continue; 
-                if (t == nameToDelete) {
+                if (t == nameToDelete && !foundAndDeleted) {
                     foundAndDeleted = true;
                 } else {
                     kept.push_back(t);
@@ -219,11 +219,9 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
                     if (i) tempFile << ',';
                     tempFile << kept[i];
                 }
-            }
-            if(currentLine <= GALLERY_LINE) {
                 tempFile << ",\n";
             } else {
-                tempFile << '\n';
+                tempFile << "\n";
             }
         } else {
             tempFile << line << '\n';
@@ -520,15 +518,15 @@ void addLog(Args arguments) {
         
     // only add name to gallery and employee/guest line if the name does not already exist in those line
 	if(arguments.employeeName != "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
-        if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name))
+        if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) {
 		    appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
+            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+        }
 	} else if(arguments.employeeName == "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
-        if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
+        if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name)) {
 	        appendToLine(arguments.logFileName, GUEST_LINE, name);
-    }
-	if(arguments.arrival && arguments.roomNumber == "noRoomNumber") {
-        if(!stringExistsInLine(arguments.logFileName, GALLERY_LINE, name))
-		    appendToLine(arguments.logFileName, GALLERY_LINE, name);
+            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+        }
     }
     // Finally, append the full command to the end of the log file for record keeping
     appendLineToFile(arguments.logFileName, arguments.fullCommand);
@@ -594,7 +592,7 @@ int main(int argc, char* argv[]) {
     std::time_t rawtime;
     std::time(&rawtime);
 
-    std::tm* timeinfo = std::localtime(&rawtime);
+    struct tm* timeinfo = std::localtime(&rawtime);
     
     char buffer[80];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d/%H:%M:%S", timeinfo);
