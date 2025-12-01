@@ -443,7 +443,7 @@ void addLog(Args arguments) {
             } 
         }
 	    else {
-		    std::cerr << "Person is not in the gallery" << std::endl;
+		    std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
             exit(1);
 	    }
 	}
@@ -465,7 +465,7 @@ void addLog(Args arguments) {
             }
 	    }
 	    else {
-		    std::cerr << "Error: Person is not in that room" << std::endl;
+		    std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
             exit(1);
 	    }
 	}
@@ -479,14 +479,14 @@ void addLog(Args arguments) {
         if(arguments.employeeName != "noEName") { 
             if (stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) { exists = exists; } 
             else {
-                std::cerr << "Error: Employee name not found in employee gallery line." << std::endl;
+                std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
                 exit(1);
             } 
         } 
         else {  
             if (stringExistsInLine(arguments.logFileName, GUEST_LINE, name)) { exists = exists; }
             else {
-                std::cerr << "Error: Guest name not found in guest gallery line." << std::endl;
+                std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
                 exit(1);
             }
         }
@@ -511,7 +511,7 @@ void addLog(Args arguments) {
 		        deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 	    }
 	    else {
-		    std::cerr << "Error 255: Person is not in gallery room" << std::endl;
+		    std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
             exit(1);
 	    }
 	}
