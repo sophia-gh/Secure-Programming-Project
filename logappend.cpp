@@ -1,17 +1,35 @@
+/*
+*    logapend.cpp
+*    
+*    Parses command line arguments in the format: ./logappend -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>
+*    Securely appends the appropriate information to the appropriate lines in the log file.
+*    Requires authentication key to proceed.
+*    
+*    Log File Format:
+*    Line 1: employees in gallery line: names of all employees currently in any room in the gallery, comma separated
+*    Line 2: guests in gallery line: names of all guests currently in any room in the gallery, comma separated
+*    Line 3: gallery line: combined names of all employees and guests currently in any room in the gallery, comma separated
+*    Line 4-28: names in room <room number>: combined names of all employees and guests currently in rooms 1-25, comma separated
+*/
+
 #include <iostream>
 #include <string>
 #include <unistd.h> // getopt on POSIX
+#include <ctime> // for timestamp
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <vector>
-#include <sstream>
+#include <sstream> 
+#include "keyAuthentication.h" // containes validateKey function and the stored hash of the system authentication key
+
 
 #define EMPLOYEE_LINE 1
 #define GUEST_LINE 2
 #define GALLERY_LINE 3
 #define ROOM_NUMBER_COUNT 29
 
-
+// Structure to hold parsed command line arguments, default values assigned
 struct Args {
     std::string timestamp = "0";
     std::string key = "noKey";
@@ -25,16 +43,18 @@ struct Args {
 };
 
 void usage(const char* prog) {
+    std::cerr << "Gallery Log Append: Appends arrival and leaving information to the specified gallery log file. Requires authentication key.\n";
     std::cerr << "Usage: " << prog
-              << " -T <timestamp> -K <key> (-A | -L) -R <roomNumber> -E <employeeName> -G <guestName> <logFileName>\n"
-              << "  -T <timestamp> ex. '2023-11-03 15:28'\n"
-              << "  -K <key>\n"
-              << "  -A    arrival (mutually exclusive with -L)\n"
-              << "  -L    leaving (mutually exclusive with -A) (must be in room to leave)\n"
-              << "  -R <room> (must be in gallery to arrive in room) \n"
-              << "  -E <employee name>\n"
-              << "  -G <guest name>\n"
-              << "  -h    show this help\n";
+              << " -K <key> (-A | -L) -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
+              << "Options:\n"
+              << "       -K <key>            TEXT: authentication key to grant access to the log\n"
+              << "       -A                  arrival (mutually exclusive with -L)\n"
+              << "       -L                  leaving (mutually exclusive with -A) (must be in room to leave)\n"
+              << "       -R <room number>    TEXT: (max: 25) (must be in gallery to arrive in room, must be in room to leave) \n"
+              << "       -E <employee name>  TEXT: name (mutually exclusive with -G)\n"
+              << "       -G <guest name>     TEXT: name (mutually exclusive with -E)\n"
+              << "                           (Guest/Employee name must not contain numbers or special characters.)\n"
+              << "       -h                  show this help message\n\n";
 }
 
 bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
@@ -90,7 +110,6 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
     }
     inFile.close();
     
-    std::cout << allLines.back() << std::endl;
     allLines.push_back(lineToAppend);
     
     // Write all lines back to temp file
@@ -177,7 +196,6 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
                 prefix = line.substr(0, colonPos + 1);
                 rest = line.substr(colonPos + 1);
             } else {
-
                 prefix.clear();
                 rest = line;
             }
@@ -202,7 +220,11 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
                     tempFile << kept[i];
                 }
             }
-            tempFile << '\n';
+            if(currentLine <= GALLERY_LINE) {
+                tempFile << ",\n";
+            } else {
+                tempFile << '\n';
+            }
         } else {
             tempFile << line << '\n';
         }
@@ -239,29 +261,47 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
 }
 
 void setUpFile(const std::string& filename) {
+    // attempt to open the given filename as 'inFile'
     std::ifstream inFile(filename);
-    std::ofstream tempFile("temp.txt");
 
-    if(!inFile.is_open() || !tempFile.is_open()) {
+    // if the given filename does not already exist, attempt to create it
+    if(!inFile.is_open()) {
+        std::ofstream createFile(filename);
+        if (!createFile) {
+            std::cerr << "Error: Could not create log file " << filename << "\n";
+            return;
+        }
+        createFile.close();
+        // attempt to open the newly created file for reading
+        inFile.open(filename);
+        if (!inFile.is_open()) {
+            std::cerr << "Error: Could not reopen log file " << filename << "\n";
+            return;
+        }
+    }
+
+    // open temporary file for writing
+    std::ofstream tempFile("temp.txt");
+    if(!tempFile.is_open()) {
+        std::cerr << "Error: Could not create temporary file for setup.\n";
         return;
     }
 
     std::vector<std::string> allLines;
     std::string line;
     
-
+    // Read all existing lines in inFile into vector
     while (std::getline(inFile, line)) {
         allLines.push_back(line);
     }
-    inFile.close();
+    inFile.close(); // close original file after reading
 
-    int currentLine = 1;
+    // write required lines to temp file if they do not already exist
+    size_t currentLine = 1;
     while (currentLine < ROOM_NUMBER_COUNT) {
         if (currentLine - 1 < allLines.size()) {
-
             line = allLines[currentLine - 1];
         } else {
-
             line = "";
         }
 
@@ -294,139 +334,235 @@ void setUpFile(const std::string& filename) {
     for (size_t i = ROOM_NUMBER_COUNT - 1; i < allLines.size(); i++) {
         tempFile << allLines[i] << '\n';
     }
-
     tempFile.close();
+
+    // Replace original file with temporary file and name it to the original filename
     std::remove(filename.c_str());
     std::rename("temp.txt", filename.c_str());
 }
 
-int safeLog(Args arguments) {
-	//sanitize time
-	//timestamp
-	bool correctTimestamp = true;
- 	if(arguments.timestamp.length() != 16)
-		correctTimestamp = false;
-	if(arguments.timestamp[4] != '-' || arguments.timestamp[7] != '-' || arguments.timestamp[13] != ':')
-		correctTimestamp = false;
+// Input validation for applicable arguments
+void safeLog(Args arguments) {
 
-	if(correctTimestamp == false) {
-		std::cerr << "Timestamp format is wrong. Ex. 2023-11-03 15:28" << std::endl;
-		return 1;
-	}
+    // Room Number Input Check
+    // Must be 25 or less (maximum of 25 rooms)
+    bool roomNumCorrect = true;
+    if(arguments.roomNumber != "noRoomNumber") {
+        for(size_t i = 0; i < arguments.roomNumber.size(); ++i) {
+            // Make sure roomNumber is all numeric. Also checks for negatives
+            // which would contain '-'.
+            if(!std::isdigit(arguments.roomNumber[i]))
+                roomNumCorrect = false;
+        } 
+        try {
+            int roomNum = std::stoi(arguments.roomNumber);
+            // Max room number = 25
+            if(roomNum > 25)
+                roomNumCorrect = false;
+        } catch(const std::invalid_argument& e) {
+            roomNumCorrect = false;
+        }
+    }
+    if(!roomNumCorrect) {
+        std::cerr << "Incorrect Room Number Value. Correct usage: -R <roomNum> (max: 25)" << std::endl;
+        exit(1);
+    }
 
+    // Employee / Guest Name Validation
+    // Name cannot have numbers or special symbols in it
+    // User can not provide both guest and employee name.
+    if(arguments.employeeName != "noEName" && arguments.guestName != "noGName") {
+        std::cerr << "Employee and Guest Name are mutually exclusive. Use '-h' for help." << std::endl;
+        exit(1);
+    }
+    
+    //store given name 
+    std::string name = "";
+    if(arguments.employeeName != "noEName") {
+        name = arguments.employeeName;
+    } else {
+        name = arguments.guestName;
+    }
 
-        return 0;
+    bool nameCorrect = true;
+    //name must not inlude numbers or special characters
+    std::string invalidNameCharacters = "1234567890_~`\";:/<>,!@#$%^&*()+=|\\?\n";
+    for(size_t i = 0; i < name.size(); ++i) {
+        for(size_t j = 0; j < invalidNameCharacters.size(); ++j) {
+            if(name[i] == invalidNameCharacters[j]) {
+                // if name contains invalid characters, it isn't correct
+                nameCorrect = false;
+            }
+        }
+    }
+    if(!nameCorrect) {
+        std::cerr << "Invalid Employee / Guest Value. Name must not contain numbers or special characters." << std::endl;
+        exit(1);
+    }
 }
 
 void addLog(Args arguments) {
-        // open log file, make sure its not currently open 
-            // someHow check the key == correct key, not sure how
-        // put a bunch of if statements here to check if things are correct
-        //.... some things to do not necessarily in order \/\/\/
-        // add ",employeeName" to first line in file
-        // add ",guestName" to second line in file
-        // if roomNumber = no roomNumber
-            // add name to line that starts with G:, for gallery as a whole
-        //if -A - R <roomNumber> is given, make sure name is in the line that starts with G:, if it isnt print error 
-            // no one can arrive in a room without entering the gallery first
-        // find line that starts with roomNumber
-        // if -A==true, add ",name" to roomNumber line
-        // if -L==true, remove ",name" from roomNumber line
-            // if -L == true but ",name" is not on roomNumber line, throw error 255
-	
-        //add employeeName
+    //Store name based on whether employee or guest in variable 'name'
 	std::string name = "0";
+	if(arguments.employeeName != "noEName") { name = arguments.employeeName; } 
+    else { name = arguments.guestName; }
 
-	if(arguments.employeeName != "noEName")
-	    name = arguments.employeeName;
-	else
-            name = arguments.guestName;
+    // if using: ./logappend -K <key> -A -R <number> (-E|-G) <Name> <logFileName> 
+    // user must be in the gallery to arrive in room <number>
+    // user can arrive in another room from current room without
+	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {  // user is arriving in a specific room
+        bool exists = false;
+        int inRoom = -1;
+        // look for name in either employee or guest gallery line
+        if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name); } 
+        else { exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, name); }
         
-
-
-	if(arguments.arrival && arguments.roomNumber != "noRoomNumber") {
-            bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+        // check to see if they are in a room other than the gallery room
+	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
+	        if(stringExistsInLine(arguments.logFileName, i, name)){ 
+                inRoom = i; 
+                exists = true;
+                break;
+            }
+        }
+        
+        // if a user is in either the employee or guest gallery line, then they are in the gallery room or a specific room
+        // if a user is in a specific room already, they can move to another room directly
 	    if(exists) {
-		//add to room number line 
+            // if name is in a numbered room already, remove from that room before adding to new room
+            if(inRoom != -1) { deleteNameFromLine(arguments.logFileName, inRoom, name); }
+            
+            // add name to new room line
             int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
-            std::cout << "Room number line: " << lineNumber << std::endl;
 	        appendToLine(arguments.logFileName, lineNumber, name);
-		//deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
-
-	    }
+            
+            // remove name from gallery and employee or guest line
+		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+            if(arguments.employeeName != "noEName") {
+                deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+            } else {
+                deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
+            } 
+        }
 	    else {
 		    std::cerr << "Person is not in the gallery" << std::endl;
+            exit(1);
 	    }
 	}
 
+    // if using ./logappend -K <key> -L -R <number> (-E|-G) <Name> <logFileName>
+    // user is leaving a specific room <number>
+    // user will be added back to gallery line and employee or guest line
 	if(arguments.leaving && arguments.roomNumber != "noRoomNumber") {
 	    int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
-            bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
+        bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
 	    if(exists) {
-		//add to room number line and remove from gallery line
-		deleteNameFromLine(arguments.logFileName, lineNumber, name);
+		    //remove from room line and add to gallery line
+		    deleteNameFromLine(arguments.logFileName, lineNumber, name);
+            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+            if(arguments.employeeName != "noEName") {
+                appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
+            } else {
+                appendToLine(arguments.logFileName, GUEST_LINE, name);
+            }
 	    }
 	    else {
-		std::cerr << "Error 255: Person is not in that room" << std::endl;
+		    std::cerr << "Error: Person is not in that room" << std::endl;
+            exit(1);
 	    }
 	}
 	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
-            bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
-	    int inRoom = -1;
+        // user is leaving the gallery entirely 
+        
+        // check that name is in the gallery line
+        bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+        // make sure the name is also in either employee or guest line, and that the wrong tag isnt being used for the wrong type of person
+        // ex: no -E guestName or -G employeeName
+        if(arguments.employeeName != "noEName") { 
+            if (stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) { exists = exists; } 
+            else {
+                std::cerr << "Error: Employee name not found in employee gallery line." << std::endl;
+                exit(1);
+            } 
+        } 
+        else {  
+            if (stringExistsInLine(arguments.logFileName, GUEST_LINE, name)) { exists = exists; }
+            else {
+                std::cerr << "Error: Guest name not found in guest gallery line." << std::endl;
+                exit(1);
+            }
+        }
 
 	    //Checking if they are also in a room
+        int inRoom = -1;
 	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
 	        if(stringExistsInLine(arguments.logFileName, i, name))
 			inRoom = i;
-			
 	    }
+
+        // if name is in the gallery line and the -E and -G tag matches their type, move on to remove name from any other line/room it appears in
 	    if(exists) {
 		// If they are in that room (not -1) then remove them
-		if(inRoom != -1)
-			deleteNameFromLine(arguments.logFileName, inRoom, name);
-		deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
-		deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
-		deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		    if(inRoom != -1)
+		    	deleteNameFromLine(arguments.logFileName, inRoom, name);
+                if(arguments.employeeName != "noEName") {
+                    deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+                } else {
+                    deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
+                }
+		        deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
 	    }
 	    else {
-		std::cerr << "Error 255: Person is not in gallery room" << std::endl;
+		    std::cerr << "Error 255: Person is not in gallery room" << std::endl;
+            exit(1);
 	    }
 	}
         
-
-	if(arguments.employeeName != "noEName" && arguments.arrival) {
-
-	    if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) {
-		bool added = appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
-
-	    }
-	}
-	else if(arguments.employeeName == "noEName" && arguments.arrival)
-            if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
+    // only add name to gallery and employee/guest line if the name does not already exist in those line
+	if(arguments.employeeName != "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
+        if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name))
+		    appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
+	} else if(arguments.employeeName == "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
+        if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name))
 	        appendToLine(arguments.logFileName, GUEST_LINE, name);
-
-	if(arguments.arrival && arguments.roomNumber == "noRoomNumber")
-            if(!stringExistsInLine(arguments.logFileName, GALLERY_LINE, name))
-		appendToLine(arguments.logFileName, GALLERY_LINE, name);
-
-
-        appendLineToFile(arguments.logFileName, arguments.fullCommand);
+    }
+	if(arguments.arrival && arguments.roomNumber == "noRoomNumber") {
+        if(!stringExistsInLine(arguments.logFileName, GALLERY_LINE, name))
+		    appendToLine(arguments.logFileName, GALLERY_LINE, name);
+    }
+    // Finally, append the full command to the end of the log file for record keeping
+    appendLineToFile(arguments.logFileName, arguments.fullCommand);
 }
 
 int main(int argc, char* argv[]) {
     Args args;
     int opt;
+    if(argc == 1) {
+        usage(argv[0]);
+        return(1);
+    }
 
-    // options that take arguments: T, K, R, E, G  (A and L are flags)
-    const char* optstring = "T:K:ALR:E:G:h";
+    bool keyIsAuthenticated = false;
+    // options that take arguments: K, R, E, G  (A and L are flags)
+    // timestamp is auto generated but if a user supplies the -T argument an error message is shown
+    // -B batch file log append is not implemented
+    const char* optstring = "T:K:BALR:E:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
+        case 'B':
+            std::cerr << "Batch file log append is not implemented. Do not include -B argument.\n";
+            usage(argv[0]);
+            return 1;
         case 'T':
-            args.timestamp = std::string(optarg).substr(0, 16);
-            break;
+            std::cerr << "Timestamp is auto-generated. Do not include -T argument.\n";
+            usage(argv[0]);
+            return 1;
         case 'K':
-            args.key = std::string(optarg).substr(0, 255);
+            //dont want to store key here
+            keyIsAuthenticated = validateKey(std::string(optarg).substr(0, 255));
+            if(keyIsAuthenticated){ args.key ="*****"; } //if key is valid, overwrite key in args for security, else leave as noKey
+            else {args.key = "invalidKey";} //makes sure that no invalid keys are stored as those inputs may be malicious, instead just store as invalidKey
             break;
         case 'R':
             args.roomNumber = std::string(optarg).substr(0, 3);
@@ -450,12 +586,20 @@ int main(int argc, char* argv[]) {
         default:
             usage(argv[0]);
             return 1;
+        }
     }
-    }
-    // add checks to make sure only allowable usage, currently will result in some errors if improper inputs
-    // ex: make sure -R is always followed buy <roomNumber
-    // make sure -E and -G are always followed by <name>
-    // must include -K <key>  
+
+    // Generate timestamp of current time in
+    // format: 'yyyy-mm-dd/hh:mm:ss'
+    std::time_t rawtime;
+    std::time(&rawtime);
+
+    std::tm* timeinfo = std::localtime(&rawtime);
+    
+    char buffer[80];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d/%H:%M:%S", timeinfo);
+    
+    args.timestamp = std::string(buffer);
 
     // After options, expect a positional logFileName
     if (optind < argc) {
@@ -466,30 +610,35 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    setUpFile(args.logFileName);
+    
 
     // Require key
-    if (args.key == "noKey" || args.key.empty()) {
+    if (args.key == "noKey" || args.key.empty()) {         //if key is somehow never overwritten, it means no key was given
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
         return 1;
+    } else if (!keyIsAuthenticated && args.key == "invalidKey") {  
+        std::cerr << "Error: invalid key\n";
+        return 1;
+    } else {
+        // means key is valid
     }
 
+    //only after key is validated
+    setUpFile(args.logFileName);
+    
     // Enforce mutually exclusive flags -A and -L
     if (args.arrival && args.leaving) {
         std::cerr << "Error: -A and -L are mutually exclusive\n";
         usage(argv[0]);
         return 1;
-    } else if(args.leaving) {
-        //logread -S given log
-        //check for given name and room number
-        //make sure there is an entry with -A -R <roomNumber> 
-        //if not print error (log state does not align: name never entered room)
     }
 
-    //add info to logfile, make sure things are correct.
-    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "");
-    int pass = safeLog(args);
+    // Validate input to program, exits if incorrect.
+    safeLog(args);
+    // Add info to log
+    args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.employeeName != "noEName" ? "Employee " + args.employeeName : "Guest " + args.guestName) + " " 
+                        + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "") + " " + (args.roomNumber != "noRoomNumber" ? "room " + args.roomNumber : "gallery");
     addLog(args);
 
     // Example debug output
