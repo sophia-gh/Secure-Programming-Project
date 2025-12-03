@@ -7,6 +7,8 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
+#include <fcntl.h>
+#include <sys/file.h>
 
 #define EMPLOYEE_LINE 1
 #define GUEST_LINE 2
@@ -39,8 +41,28 @@ void usage(const char* prog) {
               << "  -h    show this help" << std::endl;
 }
 
+bool isFileLocked(const std::string& filename) {
+    int fd = open(filename.c_str(), O_RDWR);
+    if (fd == -1) return false;
+    
+
+    if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+        close(fd);
+	std::cerr << "Error 10" << std::endl;
+        return true; 
+    }
+    
+
+    flock(fd, LOCK_UN);
+    close(fd);
+    return false;
+}
+
 bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
     std::ifstream file(filename);
+    if(isFileLocked(filename)){
+	return false;
+    }
     if (!file.is_open()) {
         return false;
     }
@@ -78,7 +100,9 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
 bool appendLineToFile(const std::string& filename, const std::string& lineToAppend) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-    
+    if(isFileLocked(filename)){
+	return false;
+    }
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -112,7 +136,9 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
 bool appendToLine(const std::string& filename, int lineNumber, const std::string& dataToAdd) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-    
+    if(isFileLocked(filename)){
+	return false;
+    }
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -154,7 +180,9 @@ bool appendToLine(const std::string& filename, int lineNumber, const std::string
 bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::string& nameToDelete) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-    
+    if(isFileLocked(filename)){
+	return false;
+    }
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -228,7 +256,9 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     if (!file.is_open()) {
         return 0; 
     }
-    
+    if(isFileLocked(filename)){
+	return false;
+    }
     std::string line;
     int currentLine = 1;
     std::string searchPattern = "names in room "+ number + ":";
@@ -246,7 +276,9 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
 void setUpFile(const std::string& filename) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-
+    if(isFileLocked(filename)){
+	return;
+    }
     if(!inFile.is_open() || !tempFile.is_open()) {
         return;
     }
@@ -516,6 +548,7 @@ int main(int argc, char* argv[]) {
     }
     // Adds timestamp of current time in
     // format: 'yyyy-mm-dd/hh:mm:ss'
+    
     std::time_t rawtime;
     std::time(&rawtime);
 
