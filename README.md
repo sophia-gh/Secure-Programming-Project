@@ -77,6 +77,15 @@ Usage: ./logread
 
 # Test Intsructions
 # 1. Run all Test Files in `testsuite` (with Makefile)
+ensure line endings are unix line endings, not windows line endings:
+```cmd
+    sed -i 's/\r$//' testsuite/*.sh
+```
+or using dos2unix if installed 
+```cmd
+    dos2unix testsuite/*.sh
+```
+Then run the make test command.
 ``` cmd
     make test
 ```
@@ -95,7 +104,7 @@ Test: testsuite/test_n.sh ................................[Pass/Fail result]
 Done Testing!
 View Output of each test in test_output.txt
 ```
-The test_output.txt file conatins the output of each test, these outputs will explain why failing tests have failed. 
+The src/test_output.txt file conatins the output of each test, these outputs will explain why failing tests have failed. 
 
 # 3 clean with make file
 ```cmd
