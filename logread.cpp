@@ -310,13 +310,13 @@ int main(int argc, char* argv[]){
 	    printRoomEnteredByEmployeeOrGuest(args);
 
     // Example debug output
-    std::cout << "Parsed arguments:\n";
+    /* std::cout << "Parsed arguments:\n";
     std::cout << "  key:          " << args.key << "\n";
     std::cout << "  state:      " << (args.state ? "yes" : "no") << "\n";
     std::cout << "  rooms:   " << (args.rooms ? "yes" : "no") << "\n";
     std::cout << "  employeeName: " << args.employeeName << "\n";
     std::cout << "  guestName:    " << args.guestName << "\n";
-    std::cout << "  logFileName:  " << args.logFileName << "\n";
+    std::cout << "  logFileName:  " << args.logFileName << "\n"; */
 
     return 0; 
 }

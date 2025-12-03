@@ -640,7 +640,7 @@ int main(int argc, char* argv[]) {
     addLog(args);
 
     // Example debug output
-    std::cout << "Parsed arguments:\n";
+    /* std::cout << "Parsed arguments:\n";
     std::cout << "  timestamp:    " << args.timestamp << "\n";
     std::cout << "  key:          " << args.key << "\n";
     std::cout << "  arrival:      " << (args.arrival ? "yes" : "no") << "\n";
@@ -648,7 +648,7 @@ int main(int argc, char* argv[]) {
     std::cout << "  roomNumber:   " << args.roomNumber << "\n";
     std::cout << "  employeeName: " << args.employeeName << "\n";
     std::cout << "  guestName:    " << args.guestName << "\n";
-    std::cout << "  logFileName:  " << args.logFileName << "\n";
+    std::cout << "  logFileName:  " << args.logFileName << "\n"; */
 
     return 0;
 }
