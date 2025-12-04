@@ -7,27 +7,69 @@
 #include <map>
 #include <algorithm>
 #include <sstream>
+#include "keyAuthentication.h"
 
-// allowable options:-K <key> -S -R <roomNumber> (-E <employeeName> | -G <guestName>) logFileName
+#define EMPLOYEE_LINE 1
+#define GUEST_LINE 2
+#define GALLERY_LINE 3
+#define ROOM_NUMBER_COUNT 29
+
+// allowable options:-K <key> -S -R (-E <employeeName> | -G <guestName>) logFileName
 struct Args {
     std::string key = "noKey";
     bool state = false;
-    std::string roomNumber = "noRoomNumber";
+    bool rooms = false;
     std::string employeeName = "noEName";
     std::string guestName = "noGName";
     std::string logFileName = "test.txt";
 };
 
 void usage(const char* prog) {
-    std::cerr << "Usage: " << prog
-              << " print gallery state:                    -K <key> -S <logfileName>\n" 
-              << " print list of people in specified room: -K <key> -R <roomNumber> (-E <employeeName> | -G <guestName>) <logFileName>\n"
+    std::cerr << "Gallery Log Read: Prints the current state of the specified log file. Requires authentication key.\n";
+    std::cerr << "Usage: " << prog << "\n"
+              << " print gallery state:                              -K <key> -S <logfileName>\n" 
+              << " print room employee or guest is currently in:     -K <key> -R (-E <employeeName> | -G <guestName>) <logFileName>\n"
               << "  -K <key>\n"
               << "  -S\n"
               << "  -R <room> (optional)(must be followed by -E OR -G)\n"
               << "  -E <employee name> (optional)\n"
               << "  -G <guest name> (optional)\n"
               << "  -h    show this help\n";
+}
+
+bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        return false;
+    }
+    
+    std::string line;
+    int currentLine = 1;
+    
+    while (currentLine < lineNumber && std::getline(file, line)) {
+        currentLine++;
+    }
+    
+    if (currentLine == lineNumber && std::getline(file, line)) {
+        size_t pos = line.find(':');
+        if (pos != std::string::npos) {
+            line.erase(0, pos+1);
+        }
+
+        std::vector<std::string> fields;
+        std::stringstream ss(line);
+        std::string field;
+        
+        while (std::getline(ss, field, ',')) {
+            field.erase(0, field.find_first_not_of(" \t\n\r"));
+            field.erase(field.find_last_not_of(" \t\n\r") + 1);
+            
+            if (field == searchString) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void printGalleryState(Args arguments){
@@ -51,52 +93,38 @@ void printGalleryState(Args arguments){
         std::string prefix = line.substr(0, colonPos);
         std::string namesStr = line.substr(colonPos + 1);
 
-
         if (prefix == "employees in gallery line") {
             employeesInGallery = namesStr;
         }
-
         else if (prefix == "guests in gallery line") {
             guestsInGallery = namesStr;
         }
-
         else if (prefix.find("names in room") != std::string::npos) {
 
             std::string roomStr = prefix.substr(13);
             int roomNumber = std::stoi(roomStr);
-            
 
             if (!namesStr.empty()) {
                 std::vector<std::string> names;
                 std::stringstream ss(namesStr);
                 std::string name;
-                
                 while (std::getline(ss, name, ',')) {
                     if (!name.empty()) {
                         names.push_back(name);
                     }
                 }
-                
                 // Sort names alphabetically
                 std::sort(names.begin(), names.end());
                 roomOccupants[roomNumber] = names;
             }
         }
     }
-
     logFile.close();
 
-
-    std::cout << employeesInGallery << std::endl;
-
-
-    std::cout << guestsInGallery << std::endl;
-
-
+    std::cout << "Employees in gallery: " << employeesInGallery << std::endl;
+    std::cout << "Guests in gallery: " << guestsInGallery << std::endl;
     for (const auto& [roomNumber, names] : roomOccupants) {
         std::cout << roomNumber << ": ";
-        
-
         for (size_t i = 0; i < names.size(); ++i) {
             std::cout << names[i];
             if (i < names.size() - 1) {
@@ -108,12 +136,12 @@ void printGalleryState(Args arguments){
 }
 
 void printRoomEnteredByEmployeeOrGuest(Args arguments){
-        // Validate that either -E or -G is specified
+    // prints room currently occupied by specified employee or guest
+    // Validate that either -E or -G is specified
     if (arguments.employeeName == "noEName" && arguments.guestName == "noGName") {
         std::cerr << "Error: Either -E or -G must be specified with -R" << std::endl;
         return;
     }
-
     std::string targetName;
     if (arguments.employeeName != "noEName") {
         targetName = arguments.employeeName;
@@ -121,12 +149,37 @@ void printRoomEnteredByEmployeeOrGuest(Args arguments){
         targetName = arguments.guestName;
     }
 
+    // Check which room the specified employee or guest is currently in
+    bool exists = false;
+    int inRoom = -1;
+    // look for name in either employee or guest gallery line
+    if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, targetName); } 
+    else { exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, targetName); }
+        
+    // check to see if they are in a room other than the gallery room
+    // if they're not in the gallery
+    if(!exists) {
+        for(int i = GALLERY_LINE+1; i < 30; ++i) {
+            if(stringExistsInLine(arguments.logFileName, i, targetName)){ 
+                inRoom = i - (GALLERY_LINE); // adjust room number to match actual room numbering
+                exists = true;
+                break;
+            }
+        }
+    }
+    if(exists && inRoom != -1){ std::cout << targetName << " is currently in Room: " << inRoom << std::endl; }
+    else if(exists && inRoom == -1){
+        std::cout << targetName << " is currently in Room: Gallery" << std::endl;
+    } else {
+        std::cerr << "Error: " << targetName << " is not currently in the gallery or any room. Make sure you are using -G and -E correctly." << std::endl;
+    }
+
+    /* // Alternative implementation that lists all rooms entered by the person in chronological order, not correctly or fully implemented
     std::ifstream logFile(arguments.logFileName);
     if (!logFile.is_open()) {
         std::cerr << "Error: Could not open log file " << arguments.logFileName << std::endl;
         return;
     }
-
     std::vector<int> roomsEntered;
     std::string line;
 
@@ -166,6 +219,7 @@ void printRoomEnteredByEmployeeOrGuest(Args arguments){
     logFile.close();
 
     // Print rooms in chronological order (as they appear in the log)
+    std::cout << targetName << " is currently in Room: ";
     if (roomsEntered.empty()) {
         std::cout << std::endl; // Print empty line if no rooms found
     } else {
@@ -177,31 +231,42 @@ void printRoomEnteredByEmployeeOrGuest(Args arguments){
         }
         std::cout << std::endl;
     }
+    */
 }
 
 int main(int argc, char* argv[]){
     Args args;
     int opt;
 
+    bool keyIsAuthenticated = false;
+
     // options that take arguments: K, R, E, G (S is a flag)
-    const char* optstring = "K:SR:E:G:h";
+    // -T is ignored as timestamp is auto-generated
+    const char* optstring = "T:K:SRE:G:h";
 
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
+            case 'T':
+                std::cerr << "Timestamp is auto-generated. Do not include -T argument.\n";
+                usage(argv[0]);
+                return 1;
             case 'K':
-                args.key = optarg;
+                //dont want to store key here
+                keyIsAuthenticated = validateKey(std::string(optarg).substr(0, 255));
+                if(keyIsAuthenticated){ args.key ="*****"; } //if key is authenticated, overwrite key in args for security, else leave as noKey
+                else {args.key = "invalidKey";}
                 break;
             case 'S':
                 args.state = true; 
                 break; 
             case 'R':
-                args.roomNumber = optarg;
+                args.rooms = true;
                 break;
             case 'E':
-                args.employeeName = optarg;
+                args.employeeName = std::string(optarg).substr(0, 127);
                 break;
             case 'G':
-                args.guestName = optarg;
+                args.guestName = std::string(optarg).substr(0, 127);
                 break;
             case 'h':
                 usage(argv[0]);
@@ -212,13 +277,6 @@ int main(int argc, char* argv[]){
                 return 1;
         }
     }
-
-    // add checks to make sure only allowable usage, currently will result in some errors if improper inputs
-    // ex: make sure -R is always followed buy <roomNumber
-    // make sure -E and -G are always followed by <name>
-    // must include -K <key>
-    // if -S make sure no other arguments are given, must be [...] -S <logFileName>
-    // ect ....
 
     // After options, expect a positional logFileName
     if (optind < argc) {
@@ -234,6 +292,11 @@ int main(int argc, char* argv[]){
         std::cerr << "Error: missing required -K <key>\n";
         usage(argv[0]);
         return 1;
+    } else if (!keyIsAuthenticated && args.key == "invalidKey") {
+        std::cerr << "Error: invalid key\n";
+        return 1;
+    } else {
+        // means key is valid
     }
 
     //if args.state == true, print state
@@ -242,18 +305,18 @@ int main(int argc, char* argv[]){
 	    printGalleryState(args); 
 
     //if args.state == false; 
-    //if args.roomNumber and employee/guest name given correctly
+    //if args.rooms and employee/guest name given correctly
     if(args.state == false)
 	    printRoomEnteredByEmployeeOrGuest(args);
 
     // Example debug output
-    std::cout << "Parsed arguments:\n";
+    /* std::cout << "Parsed arguments:\n";
     std::cout << "  key:          " << args.key << "\n";
     std::cout << "  state:      " << (args.state ? "yes" : "no") << "\n";
-    std::cout << "  roomNumber:   " << args.roomNumber << "\n";
+    std::cout << "  rooms:   " << (args.rooms ? "yes" : "no") << "\n";
     std::cout << "  employeeName: " << args.employeeName << "\n";
     std::cout << "  guestName:    " << args.guestName << "\n";
-    std::cout << "  logFileName:  " << args.logFileName << "\n";
+    std::cout << "  logFileName:  " << args.logFileName << "\n"; */
 
     return 0; 
 }
