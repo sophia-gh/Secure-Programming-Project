@@ -10,20 +10,25 @@
 ./logappend -K GKgalleryKey99 -A -R 22 -E John testlog.txt
 ./logappend -K GKgalleryKey99 -A -R 6 -G Bob testlog.txt
 ./logappend -K GKgalleryKey99 -A -R 7 -G Charlie testlog.txt
-output=$(./logread -K GKgalleryKey99 -S testlog.txt)
+output=$( ./logread -K GKgalleryKey99 -R -E Janet testlog.txt
+          ./logread -K GKgalleryKey99 -R -G Bob testlog.txt 
+          ./logread -K GKgalleryKey99 -R -G Charlie testlog.txt 
+          ./logread -K GKgalleryKey99 -R -E John testlog.txt 
+          ./logread -K GKgalleryKey99 -R -E Fred testlog.txt )
+
 rm -f testlog.txt
 
-expected="Employees in gallery: Fred,
-Guests in gallery: Alice,
-6: Bob
-7: Charlie,Janet
-22: John"
+expected="Janet is currently in Room: 7
+Bob is currently in Room: 6
+Charlie is currently in Room: 7
+John is currently in Room: 22
+Fred is currently in Room: Gallery"
 
 if [[ "$output" != "$expected" ]]; then
     echo "[FAILED]"
-    echo "=+= test_logread_state.sh Output =+="
+    echo "=+= test_logread_room.sh Output =+="
     echo ""
-    echo "Test logread state output did not match expected!" 
+    echo "Test logread room output did not match expected!" 
     echo "Expected: '$expected'"
     echo "Got: '$output'"
     echo ""
@@ -32,9 +37,9 @@ if [[ "$output" != "$expected" ]]; then
 fi
 
 echo "[PASSED]"
-echo "=+= test_logread_state.sh Output =+="
+echo "=+= test_logread_room.sh Output =+="
 echo ""
-echo "Test logread state output passed."
+echo "Test logread room output passed."
 echo ""
 echo "=+= end Output =+="
 exit 0

@@ -262,94 +262,38 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
 }
 
 // make sure to encrypt file after setting up
-void setUpFile(const std::string& filename, const std::string& originalLogFile) {
-    std::ifstream inFile(filename);
-    inFile.open(filename);
+void setUpFile(const std::string& decryptedFile, const std::string& originalLogFile) {
+    std::ifstream inFile(decryptedFile);
 
-   if(!inFile.is_open()) { // attempt to open the decrypted file
-        // if the given filename does not already exist, attempt to create it
-        std::ofstream createFile(filename);
-        if (!createFile) {
-            std::cerr << "Error: Could not create log file " << filename << "\n";
-            return;
-        }
-        createFile.close();
-        // attempt to open the newly created file for reading
-        inFile.open(filename);
-        if (!inFile.is_open()) {
-            std::cerr << "Error: Could not reopen log file " << filename << "\n";
-            return;
-        }
-    }
-
-    // open temporary file for writing
-    std::ofstream tempFile("temp.txt");
-    if(!tempFile.is_open()) {
-        std::cerr << "Error: Could not create temporary file for setup.\n";
+    // If the file already exists, do not overwrite with default structure
+    if (inFile.is_open()) {
+        inFile.close();
         return;
     }
 
-    std::vector<std::string> allLines;
-    std::string line;
-    // Read all existing lines in inFile into vector
-    while (std::getline(inFile, line)) {
-        allLines.push_back(line);
+    // File does not exist, attempt to create it 
+    std::ofstream outFile(decryptedFile);
+    if (!outFile.is_open()) {
+        std::cerr << "Error: Could not create log file " << decryptedFile << "\n";
+        return;
     }
-    inFile.close(); // close original file after reading
-
-    // write required lines to temp file if they do not already exist
-    size_t currentLine = 1;
-    while (currentLine < ROOM_NUMBER_COUNT) {
-        if (currentLine - 1 < allLines.size()) {
-            line = allLines[currentLine - 1];
-        } else {
-            line = "";
-        }
-
-        if(currentLine == 1) {
-            if(line.find("employees in gallery line:") == std::string::npos) {
-                line.insert(0, "employees in gallery line:");
-            }
-        }
-        else if(currentLine == 2) {
-            if(line.find("guests in gallery line:") == std::string::npos) {
-                line.insert(0, "guests in gallery line:");
-            }
-        }
-        else if(currentLine == 3) {
-            if(line.find("names in gallery line:") == std::string::npos) {
-                line.insert(0, "names in gallery line:");
-            }
-        }
-        else if(currentLine > 3) {
-            std::string lineNumber = std::to_string(currentLine-3);
-            std::string toSearch = "names in room " + lineNumber + ":";
-            if(line.find(toSearch) == std::string::npos)
-                line.insert(0, toSearch);
-        }
-
-        tempFile << line << '\n';
-        ++currentLine;
+    // set up structure, first three lines are gallery and employee/guest lines, next 25 are room lines
+    outFile << "employees in gallery line:\n";
+    outFile << "guests in gallery line:\n";
+    outFile << "names in gallery line:\n";
+    for (int room = 1; room <= 25; ++room) {
+        outFile << "names in room " << room << ":\n";
     }
+    outFile.close();
 
-    for (size_t i = ROOM_NUMBER_COUNT - 1; i < allLines.size(); i++) {
-        tempFile << allLines[i] << '\n';
-    }
-    tempFile.close();
-
-    // Replace original file with temporary file and name it to the original filename
-    std::remove(filename.c_str());
-    std::rename("temp.txt", filename.c_str());  // decrypted file is now set up
-    
-    // encrypt the newly set up file
-    if (!encryptFile(filename, originalLogFile, AES_KEY)) {
+    // Encrypt the new file to the original log file
+    if (!encryptFile(decryptedFile, originalLogFile, AES_KEY)) {
         std::cerr << "Error: Could not encrypt log file after setup.\n";
     }
 }
 
 // Input validation for applicable arguments
 void safeLog(Args arguments) {
-
     // Room Number Input Check
     // Must be 25 or less (maximum of 25 rooms)
     bool roomNumCorrect = true;
@@ -664,17 +608,6 @@ int main(int argc, char* argv[]) {
 
     // Clean up temporary plaintext file
     std::remove(args.decryptedFileName.c_str());
-
-    // Example debug output
-    std::cout << "Parsed arguments:\n";
-    std::cout << "  timestamp:    " << args.timestamp << "\n";
-    std::cout << "  key:          " << args.key << "\n";
-    std::cout << "  arrival:      " << (args.arrival ? "yes" : "no") << "\n";
-    std::cout << "  leaving:      " << (args.leaving ? "yes" : "no") << "\n";
-    std::cout << "  roomNumber:   " << args.roomNumber << "\n";
-    std::cout << "  employeeName: " << args.employeeName << "\n";
-    std::cout << "  guestName:    " << args.guestName << "\n";
-    std::cout << "  logFileName:  " << args.logFileName << "\n";
 
     flock(fd, LOCK_UN);
     close(fd);

@@ -23,6 +23,7 @@ struct Args {
     std::string employeeName = "noEName";
     std::string guestName = "noGName";
     std::string logFileName = "test.txt";
+    std::string decryptedFileName = "log_temp.txt";
 };
 
 void usage(const char* prog) {
@@ -75,9 +76,9 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
 
 void printGalleryState(Args arguments){
     //print log state
-    std::ifstream logFile(arguments.logFileName);
+    std::ifstream logFile(arguments.decryptedFileName);
     if (!logFile.is_open()) {
-        std::cerr << "Error: Could not open log file " << arguments.logFileName << std::endl;
+        std::cerr << "Error: Could not open log file " << std::endl;
         return;
     }
 
@@ -154,14 +155,14 @@ void printRoomEnteredByEmployeeOrGuest(Args arguments){
     bool exists = false;
     int inRoom = -1;
     // look for name in either employee or guest gallery line
-    if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, targetName); } 
-    else { exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, targetName); }
+    if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.decryptedFileName, EMPLOYEE_LINE, targetName); } 
+    else { exists = stringExistsInLine(arguments.decryptedFileName, GUEST_LINE, targetName); }
         
     // check to see if they are in a room other than the gallery room
     // if they're not in the gallery
     if(!exists) {
         for(int i = GALLERY_LINE+1; i < 30; ++i) {
-            if(stringExistsInLine(arguments.logFileName, i, targetName)){ 
+            if(stringExistsInLine(arguments.decryptedFileName, i, targetName)){ 
                 inRoom = i - (GALLERY_LINE); // adjust room number to match actual room numbering
                 exists = true;
                 break;
@@ -174,65 +175,6 @@ void printRoomEnteredByEmployeeOrGuest(Args arguments){
     } else {
         std::cerr << "Error: " << targetName << " is not currently in the gallery or any room. Make sure you are using -G and -E correctly." << std::endl;
     }
-
-    /* // Alternative implementation that lists all rooms entered by the person in chronological order, not correctly or fully implemented
-    std::ifstream logFile(arguments.logFileName);
-    if (!logFile.is_open()) {
-        std::cerr << "Error: Could not open log file " << arguments.logFileName << std::endl;
-        return;
-    }
-    std::vector<int> roomsEntered;
-    std::string line;
-
-    while (std::getline(logFile, line)) {
-        // Find the colon separator
-        size_t colonPos = line.find(':');
-        if (colonPos == std::string::npos) continue;
-
-        std::string prefix = line.substr(0, colonPos);
-        std::string namesStr = line.substr(colonPos + 1);
-
-        if (prefix.find("names in room") != std::string::npos) {
-
-            std::string roomStr = prefix.substr(13); 
-            int roomNumber = std::stoi(roomStr);
-            
-
-            if (!namesStr.empty()) {
-                std::stringstream ss(namesStr);
-                std::string name;
-                bool found = false;
-                
-                while (std::getline(ss, name, ',')) {
-                    if (name == targetName) {
-                        found = true;
-                        break;
-                    }
-                }
-                
-                if (found) {
-                    roomsEntered.push_back(roomNumber);
-                }
-            }
-        }
-    }
-
-    logFile.close();
-
-    // Print rooms in chronological order (as they appear in the log)
-    std::cout << targetName << " is currently in Room: ";
-    if (roomsEntered.empty()) {
-        std::cout << std::endl; // Print empty line if no rooms found
-    } else {
-        for (size_t i = 0; i < roomsEntered.size(); ++i) {
-            std::cout << roomsEntered[i];
-            if (i < roomsEntered.size() - 1) {
-                std::cout << ",";
-            }
-        }
-        std::cout << std::endl;
-    }
-    */
 }
 
 int main(int argc, char* argv[]){
@@ -301,6 +243,15 @@ int main(int argc, char* argv[]){
     }
 
     //if args.state == true, print state
+    std::ifstream testFile(args.logFileName);    // to see if file exists
+    if (testFile.is_open()) {  // if the logfile exits, decrypt before operating on, store as temporary plaintext file
+        if (!decryptFile(args.logFileName, args.decryptedFileName, AES_KEY)) {
+            std::cerr << "Error: failed to decrypt log file\n";
+            return 1;
+        } 
+    }
+    testFile.close();
+
     //key is verified
     if(args.state == true)
 	    printGalleryState(args); 
@@ -310,14 +261,13 @@ int main(int argc, char* argv[]){
     if(args.state == false)
 	    printRoomEnteredByEmployeeOrGuest(args);
 
-    // Example debug output
-    /* std::cout << "Parsed arguments:\n";
-    std::cout << "  key:          " << args.key << "\n";
-    std::cout << "  state:      " << (args.state ? "yes" : "no") << "\n";
-    std::cout << "  rooms:   " << (args.rooms ? "yes" : "no") << "\n";
-    std::cout << "  employeeName: " << args.employeeName << "\n";
-    std::cout << "  guestName:    " << args.guestName << "\n";
-    std::cout << "  logFileName:  " << args.logFileName << "\n"; */
-
+    // Encrypt back to original file
+    if (!encryptFile(args.decryptedFileName, args.logFileName, AES_KEY)) {
+        std::cerr << "Error: failed to encrypt log file\n";
+        return 1;
+    }
+    
+    // Clean up temporary plaintext file
+    std::remove(args.decryptedFileName.c_str());
     return 0; 
 }
