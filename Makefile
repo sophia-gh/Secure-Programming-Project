@@ -1,7 +1,7 @@
 # compiler flags
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
-LDFLAGS :=
+LDFLAGS := -lcryptopp
 
 # source files
 SRCS = logappend.cpp logread.cpp
@@ -11,6 +11,11 @@ BCRYPT_SRCS = external/bcrypt/bcrypt.cpp external/bcrypt/blowfish.cpp
 OBJS = $(SRCS:.cpp=.o)
 BCRYPT_OBJS = $(BCRYPT_SRCS:.cpp=.o)
 
+# AES encryption source
+AES_SRCS = aes_file_encryption_functions.cpp
+AES_OBJS = $(AES_SRCS:.cpp=.o)
+
+
 # targets ------------------------------------------------------------------
 TARGETS = logappend logread
 .PHONY: all clean
@@ -19,20 +24,21 @@ all: $(TARGETS)
 	@echo "\033[38;5;42m[Build Complete]\033[0m"
 
 # executables
-logappend: logappend.o $(BCRYPT_OBJS)
+logappend: logappend.o $(BCRYPT_OBJS) $(AES_OBJS)
 	@echo "\033[38;5;190m[Linking]\033[0m           $@"
-	@$(CXX) $(LDFLAGS) -o $@ $^
+	@$(CXX) -o $@ $^ $(LDFLAGS)
 
-logread: logread.o $(BCRYPT_OBJS)
+logread: logread.o $(BCRYPT_OBJS) $(AES_OBJS)
 	@echo "\033[38;5;190m[Linking]\033[0m           $@"
-	@$(CXX) $(LDFLAGS) -o $@ $^
+	@$(CXX) -o $@ $^ $(LDFLAGS)
 
+# pattern rule for object files
 %.o: %.cpp
 	@echo "\033[38;5;42m[Building File]\033[0m     $<"
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(BCRYPT_OBJS) $(TARGETS) test_output.txt
+	rm -f $(OBJS) $(BCRYPT_OBJS) $(TARGETS) $(AES_OBJS) test_output.txt
 
 # tests --------------------------------------------------------------------
 TESTS := $(wildcard testsuite/*.sh)

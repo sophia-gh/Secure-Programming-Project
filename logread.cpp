@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <sstream>
 #include "keyAuthentication.h"
+#include "aes_file_encryption_functions.h"
 
 #define EMPLOYEE_LINE 1
 #define GUEST_LINE 2

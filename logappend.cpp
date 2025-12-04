@@ -25,6 +25,7 @@
 #include <sys/file.h>
 #include <sstream> 
 #include "keyAuthentication.h" // containes validateKey function and the stored hash of the system authentication key
+#include "aes_file_encryption_functions.h" // contains encryptFile and decryptFile functions
 
 
 #define EMPLOYEE_LINE 1
@@ -42,6 +43,7 @@ struct Args {
     std::string employeeName = "noEName";
     std::string guestName = "noGName";
     std::string logFileName = "test.txt";
+    std::string decryptedFileName = "log_plain.txt";
     std::string fullCommand = "none";
 };
 
@@ -64,14 +66,11 @@ bool isFileLocked(const std::string& filename) {
     int fd = open(filename.c_str(), O_RDWR);
     if (fd == -1) return false;
     
-
     if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
         close(fd);
-
         return true; 
     }
     
-
     flock(fd, LOCK_UN);
     close(fd);
     return false;
@@ -79,14 +78,12 @@ bool isFileLocked(const std::string& filename) {
 
 bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
     std::ifstream file(filename);
-
     if (!file.is_open()) {
         return false;
     }
     
     std::string line;
     int currentLine = 1;
-    
     while (currentLine < lineNumber && std::getline(file, line)) {
         currentLine++;
     }
@@ -100,7 +97,6 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
         std::vector<std::string> fields;
         std::stringstream ss(line);
         std::string field;
-        
         while (std::getline(ss, field, ',')) {
             field.erase(0, field.find_first_not_of(" \t\n\r"));
             field.erase(field.find_last_not_of(" \t\n\r") + 1);
@@ -117,14 +113,12 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
 bool appendLineToFile(const std::string& filename, const std::string& lineToAppend) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
-    
+
     std::vector<std::string> allLines;
     std::string line;
-    
     // Read all existing lines into vector
     while (std::getline(inFile, line)) {
         allLines.push_back(line);
@@ -132,12 +126,10 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
     inFile.close();
     
     allLines.push_back(lineToAppend);
-    
     // Write all lines back to temp file
     for (const auto& l : allLines) {
         tempFile << l << "\n";
     }
-    
     tempFile.close();
     
     // Replace original file
@@ -150,7 +142,6 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
 bool appendToLine(const std::string& filename, int lineNumber, const std::string& dataToAdd) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -158,7 +149,6 @@ bool appendToLine(const std::string& filename, int lineNumber, const std::string
     std::string line;
     int currentLine = 1;
     bool lineExists = false;
-    
     while (std::getline(inFile, line)) {
         if (currentLine == lineNumber) {
             tempFile << line << dataToAdd << "," << '\n';
@@ -170,19 +160,15 @@ bool appendToLine(const std::string& filename, int lineNumber, const std::string
     }
 
     if (!lineExists) {
-
         while (currentLine < lineNumber) {
             tempFile << "\n";
             currentLine++;
         }
-
         tempFile << dataToAdd << "," << '\n';
     }
     
     inFile.close();
     tempFile.close();
-    
-
     std::remove(filename.c_str());
     std::rename("temp.txt", filename.c_str());
     
@@ -192,7 +178,6 @@ bool appendToLine(const std::string& filename, int lineNumber, const std::string
 bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::string& nameToDelete) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -207,7 +192,6 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
     std::string line;
     int currentLine = 1;
     bool foundAndDeleted = false;
-    
     while (std::getline(inFile, line)) {
         if (currentLine == lineNumber) {
             std::string prefix;
@@ -252,7 +236,6 @@ bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::
     
     inFile.close();
     tempFile.close();
-    
     std::remove(filename.c_str());
     std::rename("temp.txt", filename.c_str());
     
@@ -268,7 +251,6 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     std::string line;
     int currentLine = 1;
     std::string searchPattern = "names in room "+ number + ":";
-    
     while (std::getline(file, line)) {
         if (line.find(searchPattern) == 0) {
             return currentLine;
@@ -279,12 +261,13 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     return 0;
 }
 
-void setUpFile(const std::string& filename) {
-    // attempt to open the given filename as 'inFile'
+// make sure to encrypt file after setting up
+void setUpFile(const std::string& filename, const std::string& originalLogFile) {
     std::ifstream inFile(filename);
+    inFile.open(filename);
 
-    // if the given filename does not already exist, attempt to create it
-    if(!inFile.is_open()) {
+   if(!inFile.is_open()) { // attempt to open the decrypted file
+        // if the given filename does not already exist, attempt to create it
         std::ofstream createFile(filename);
         if (!createFile) {
             std::cerr << "Error: Could not create log file " << filename << "\n";
@@ -308,7 +291,6 @@ void setUpFile(const std::string& filename) {
 
     std::vector<std::string> allLines;
     std::string line;
-    
     // Read all existing lines in inFile into vector
     while (std::getline(inFile, line)) {
         allLines.push_back(line);
@@ -357,7 +339,12 @@ void setUpFile(const std::string& filename) {
 
     // Replace original file with temporary file and name it to the original filename
     std::remove(filename.c_str());
-    std::rename("temp.txt", filename.c_str());
+    std::rename("temp.txt", filename.c_str());  // decrypted file is now set up
+    
+    // encrypt the newly set up file
+    if (!encryptFile(filename, originalLogFile, AES_KEY)) {
+        std::cerr << "Error: Could not encrypt log file after setup.\n";
+    }
 }
 
 // Input validation for applicable arguments
@@ -433,12 +420,12 @@ void addLog(Args arguments) {
         bool exists = false;
         int inRoom = -1;
         // look for name in either employee or guest gallery line
-        if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name); } 
-        else { exists = stringExistsInLine(arguments.logFileName, GUEST_LINE, name); }
+        if(arguments.employeeName != "noEName") { exists = stringExistsInLine(arguments.decryptedFileName, EMPLOYEE_LINE, name); } 
+        else { exists = stringExistsInLine(arguments.decryptedFileName, GUEST_LINE, name); }
         
         // check to see if they are in a room other than the gallery room
 	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
-	        if(stringExistsInLine(arguments.logFileName, i, name)){ 
+	        if(stringExistsInLine(arguments.decryptedFileName, i, name)){ 
                 inRoom = i; 
                 exists = true;
                 break;
@@ -449,18 +436,18 @@ void addLog(Args arguments) {
         // if a user is in a specific room already, they can move to another room directly
 	    if(exists) {
             // if name is in a numbered room already, remove from that room before adding to new room
-            if(inRoom != -1) { deleteNameFromLine(arguments.logFileName, inRoom, name); }
+            if(inRoom != -1) { deleteNameFromLine(arguments.decryptedFileName, inRoom, name); }
             
             // add name to new room line
-            int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
-	        appendToLine(arguments.logFileName, lineNumber, name);
+            int lineNumber = findRoomNumberLine(arguments.decryptedFileName, arguments.roomNumber);
+	        appendToLine(arguments.decryptedFileName, lineNumber, name);
             
             // remove name from gallery and employee or guest line
-		    deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		    deleteNameFromLine(arguments.decryptedFileName, GALLERY_LINE, name);
             if(arguments.employeeName != "noEName") {
-                deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+                deleteNameFromLine(arguments.decryptedFileName, EMPLOYEE_LINE, name);
             } else {
-                deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
+                deleteNameFromLine(arguments.decryptedFileName, GUEST_LINE, name);
             } 
         }
 	    else {
@@ -473,16 +460,16 @@ void addLog(Args arguments) {
     // user is leaving a specific room <number>
     // user will be added back to gallery line and employee or guest line
 	if(arguments.leaving && arguments.roomNumber != "noRoomNumber") {
-	    int lineNumber = findRoomNumberLine(arguments.logFileName, arguments.roomNumber);
-        bool exists = stringExistsInLine(arguments.logFileName, lineNumber, name);
+	    int lineNumber = findRoomNumberLine(arguments.decryptedFileName, arguments.roomNumber);
+        bool exists = stringExistsInLine(arguments.decryptedFileName, lineNumber, name);
 	    if(exists) {
 		    //remove from room line and add to gallery line
-		    deleteNameFromLine(arguments.logFileName, lineNumber, name);
-            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+		    deleteNameFromLine(arguments.decryptedFileName, lineNumber, name);
+            appendToLine(arguments.decryptedFileName, GALLERY_LINE, name);
             if(arguments.employeeName != "noEName") {
-                appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
+                appendToLine(arguments.decryptedFileName, EMPLOYEE_LINE, name);
             } else {
-                appendToLine(arguments.logFileName, GUEST_LINE, name);
+                appendToLine(arguments.decryptedFileName, GUEST_LINE, name);
             }
 	    }
 	    else {
@@ -492,65 +479,61 @@ void addLog(Args arguments) {
 	}
 	else if(arguments.leaving && arguments.roomNumber == "noRoomNumber") {
         // user is leaving the gallery entirely 
-        
         // check that name is in the gallery line
-        bool exists = stringExistsInLine(arguments.logFileName, GALLERY_LINE, name);
+        bool exists = stringExistsInLine(arguments.decryptedFileName, GALLERY_LINE, name);
         // make sure the name is also in either employee or guest line, and that the wrong tag isnt being used for the wrong type of person
         // ex: no -E guestName or -G employeeName
         if(arguments.employeeName != "noEName") { 
-            if (stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) { exists = exists; } 
+            if (stringExistsInLine(arguments.decryptedFileName, EMPLOYEE_LINE, name)) { exists = exists; } 
             else {
                 std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
                 exit(1);
             } 
         } 
         else {  
-            if (stringExistsInLine(arguments.logFileName, GUEST_LINE, name)) { exists = exists; }
+            if (stringExistsInLine(arguments.decryptedFileName, GUEST_LINE, name)) { exists = exists; }
             else {
                 std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
                 exit(1);
             }
         }
-
 	    //Checking if they are also in a room
         int inRoom = -1;
 	    for(int i = GALLERY_LINE+1; i < 30; ++i) {
-	        if(stringExistsInLine(arguments.logFileName, i, name))
+	        if(stringExistsInLine(arguments.decryptedFileName, i, name))
 			inRoom = i;
 	    }
-
         // if name is in the gallery line and the -E and -G tag matches their type, move on to remove name from any other line/room it appears in
 	    if(exists) {
 		// If they are in that room (not -1) then remove them
 		    if(inRoom != -1)
-		    	deleteNameFromLine(arguments.logFileName, inRoom, name);
+		    	deleteNameFromLine(arguments.decryptedFileName, inRoom, name);
                 if(arguments.employeeName != "noEName") {
-                    deleteNameFromLine(arguments.logFileName, EMPLOYEE_LINE, name);
+                    deleteNameFromLine(arguments.decryptedFileName, EMPLOYEE_LINE, name);
                 } else {
-                    deleteNameFromLine(arguments.logFileName, GUEST_LINE, name);
+                    deleteNameFromLine(arguments.decryptedFileName, GUEST_LINE, name);
                 }
-		        deleteNameFromLine(arguments.logFileName, GALLERY_LINE, name);
+		        deleteNameFromLine(arguments.decryptedFileName, GALLERY_LINE, name);
 	    }
 	    else {
 		    std::cerr << "Invalid Usage. Use -h for usage information." << std::endl;
             exit(1);
 	    }
-	}
-        
+	}    
     // only add name to gallery and employee/guest line if the name does not already exist in those line
 	if(arguments.employeeName != "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
-        if(!stringExistsInLine(arguments.logFileName, EMPLOYEE_LINE, name)) {
-		    appendToLine(arguments.logFileName, EMPLOYEE_LINE, name);
-            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+        if(!stringExistsInLine(arguments.decryptedFileName, EMPLOYEE_LINE, name)) {
+		    appendToLine(arguments.decryptedFileName, EMPLOYEE_LINE, name);
+            appendToLine(arguments.decryptedFileName, GALLERY_LINE, name);
         }
 	} else if(arguments.employeeName == "noEName" && arguments.arrival && arguments.roomNumber == "noRoomNumber") {
-        if(!stringExistsInLine(arguments.logFileName, GUEST_LINE, name)) {
-	        appendToLine(arguments.logFileName, GUEST_LINE, name);
-            appendToLine(arguments.logFileName, GALLERY_LINE, name);
+        if(!stringExistsInLine(arguments.decryptedFileName, GUEST_LINE, name)) {
+	        appendToLine(arguments.decryptedFileName, GUEST_LINE, name);
+            appendToLine(arguments.decryptedFileName, GALLERY_LINE, name);
         }
     }
     // Finally, append the full command to the end of the log file for record keeping
-    appendLineToFile(arguments.logFileName, arguments.fullCommand);
+    appendLineToFile(arguments.decryptedFileName, arguments.fullCommand);
 }
 
 int main(int argc, char* argv[]) {
@@ -562,11 +545,11 @@ int main(int argc, char* argv[]) {
     }
 
     bool keyIsAuthenticated = false;
+    
     // options that take arguments: K, R, E, G  (A and L are flags)
     // timestamp is auto generated but if a user supplies the -T argument an error message is shown
     // -B batch file log append is not implemented
     const char* optstring = "T:K:BALR:E:G:h";
-
     while ((opt = getopt(argc, argv, optstring)) != -1) {
         switch (opt) {
         case 'B':
@@ -610,15 +593,11 @@ int main(int argc, char* argv[]) {
 
     // Generate timestamp of current time in
     // format: 'yyyy-mm-dd/hh:mm:ss'
-    
     std::time_t rawtime;
     std::time(&rawtime);
-
     struct tm* timeinfo = std::localtime(&rawtime);
-    
     char buffer[80];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d/%H:%M:%S", timeinfo);
-    
     args.timestamp = std::string(buffer);
 
     // After options, expect a positional logFileName
@@ -629,15 +608,15 @@ int main(int argc, char* argv[]) {
         usage(argv[0]);
         return 1;
     }
-    int fd = 0; 
-    if (!isFileLocked(args.logFileName)) {
-	fd = open(args.logFileName.c_str(), O_RDWR);
-    } else {
-	std::cerr << "Error 1010101" << std::endl;
-	return 1;
-    }
 
-    setUpFile(args.logFileName);
+    // file locking logic
+    int fd = 0;
+    if (!isFileLocked(args.logFileName)) {
+	    fd = open(args.logFileName.c_str(), O_RDWR);
+    } else {
+	    std::cerr << "Error 1010101" << std::endl;
+	    return 1;
+    }
 
     // Require key
     if (args.key == "noKey" || args.key.empty()) {         //if key is somehow never overwritten, it means no key was given
@@ -651,8 +630,16 @@ int main(int argc, char* argv[]) {
         // means key is valid
     }
 
-    //only after key is validated
-    setUpFile(args.logFileName);
+    std::ifstream testFile(args.logFileName);    // to see if file exists
+    if (testFile.is_open()) {  // if the logfile exits, decrypt before operating on, store as temporary plaintext file
+        if (!decryptFile(args.logFileName, args.decryptedFileName, AES_KEY)) {
+            std::cerr << "Error: failed to decrypt log file\n";
+            return 1;
+        } 
+    }
+    testFile.close();
+    //only after key is validated, logfile will be encrypted again after setup
+    setUpFile(args.decryptedFileName, args.logFileName);
     
     // Enforce mutually exclusive flags -A and -L
     if (args.arrival && args.leaving) {
@@ -663,13 +650,23 @@ int main(int argc, char* argv[]) {
 
     // Validate input to program, exits if incorrect.
     safeLog(args);
+    
     // Add info to log
     args.fullCommand = args.timestamp + " " + argv[0] + " " + (args.employeeName != "noEName" ? "Employee " + args.employeeName : "Guest " + args.guestName) + " " 
                         + (args.arrival ? "arrival" : "") + (args.leaving ? "leaving" : "") + " " + (args.roomNumber != "noRoomNumber" ? "room " + args.roomNumber : "gallery");
     addLog(args);
 
+    // Encrypt back to original file
+    if (!encryptFile(args.decryptedFileName, args.logFileName, AES_KEY)) {
+        std::cerr << "Error: failed to encrypt log file\n";
+        return 1;
+    }
+
+    // Clean up temporary plaintext file
+    std::remove(args.decryptedFileName.c_str());
+
     // Example debug output
-    /* std::cout << "Parsed arguments:\n";
+    std::cout << "Parsed arguments:\n";
     std::cout << "  timestamp:    " << args.timestamp << "\n";
     std::cout << "  key:          " << args.key << "\n";
     std::cout << "  arrival:      " << (args.arrival ? "yes" : "no") << "\n";
@@ -677,7 +674,7 @@ int main(int argc, char* argv[]) {
     std::cout << "  roomNumber:   " << args.roomNumber << "\n";
     std::cout << "  employeeName: " << args.employeeName << "\n";
     std::cout << "  guestName:    " << args.guestName << "\n";
-    std::cout << "  logFileName:  " << args.logFileName << "\n"; */
+    std::cout << "  logFileName:  " << args.logFileName << "\n";
 
     flock(fd, LOCK_UN);
     close(fd);
