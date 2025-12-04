@@ -6,8 +6,13 @@ Logging system implemented based on "Build it, Break it, Fix it" challenge outli
 ## Security Implementations
 - Password hashing implemented with an external library: [bcrypt](https://github.com/hilch/Bcrypt.cpp). 
 - File locking implmented with `flock()` and file descriptors to prevent multiple processses from accessing the same log file. 
+- Input sanitization to prevent malicious inputs and limit un-intended interactions with the programs. This is done in both programs. see `safeLog()` in `logappend`. 
+- Robust error checking with minimal error messages that provide no internal details.  
+- Use of memory safe options for input handling such as the c++ <string> library and its associated functions. 
+- AES File Encryption implemented with [Crypto++](https://www.cryptopp.com/wiki/Advanced_Encryption_Standard) using several rounds of trial and error.
+    - **NOTE: AES is implemented on the branch `crypto-encryption`. This branch is not merged with `main` as we did not get the chance to fully test the changes and wanted to maintain the pre-aes branch as well, please check out the other branch to see this implementation.**
 
-
+<br></br>
 # Usage
 ## Logappend
 The logAppend program allows a user, with the proper key, to log a guest or employee's actions. The actions include: arriving in the gallery, arriving in a specific room, leaving a specific room, and leaving the gallery. A user must first arrive in the gallery to arrive in a subsequent room, and a user must leave an internal room to leave the gallery. We strayed from the instructions by auto-generating the timestamp rather than allowing users to specify the timestamp. The -B batch option is also not implemented. 
@@ -47,6 +52,32 @@ Options:
 ```
 ## Logread
 The logread program is implemented with two core features: read state, and read room. Read state allows authenticated users to view all guests and employees currently in the given log file. Read room allows authenticated users to view the room a specified guest or employee is currently in. 
+1. Read State, outputs the current state of the gallery including the employees and guests inside and which room they are in. 
+```cmd
+    ./logappend -K GKgalleryKey99 -A -G Charlie testlog.txt
+    ./logappend -K GKgalleryKey99 -A -E Fred testlog.txt
+    ./logappend -K GKgalleryKey99 -A -R 7 -G Charlie testlog.txt
+    ./logread -K GKgalleryKey99 -S testlog.txt
+```
+State Output: Shows Fred, an employee, in the gallery room and Charlie in room 7.
+```
+    Employees in gallery: Fred,
+    Guests in gallery:
+    7: Charlie
+```
+
+2. Read Room, shows the current room of the specified employee or guest. 
+```cmd
+    ./logappend -K GKgalleryKey99 -A -G Charlie testlog.txt
+    ./logappend -K GKgalleryKey99 -A -E Fred testlog.txt
+    ./logappend -K GKgalleryKey99 -A -R 7 -G Charlie testlog.txt
+    ./logread -K GKgalleryKey99 -R -G Charlie testlog.txt
+```
+Room Output:
+```cmd
+    Charlie is currently in Room: 7
+```
+
 Usage:
 ``` cmd
 Gallery Log Read: Prints the current state of the specified log file. Requires authentication key.
@@ -61,7 +92,12 @@ Usage: ./logread
   -h    show this help
 ```
 
+<br></br>
 # Instructions to Run (in WSL or Linux Environments)
+# 0. Install crypto++ library (on ubuntu) (for branch `crypto-encryption`)
+``` cmd
+sudo apt install libcrypto++-dev libcrypto++-doc libcrypto++-utils
+```
 # 1. Compile Files (with Makefile)
 ``` cmd
     make 
@@ -114,3 +150,5 @@ The src/test_output.txt file conatins the output of each test, these outputs wil
     make clean
 ```
 *this removes all excutables and objects created with the 'make test' or 'make command' command*
+
+*this also removes all log files with the naming convention `log*.txt`*

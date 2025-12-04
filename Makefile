@@ -32,7 +32,7 @@ logread: logread.o $(BCRYPT_OBJS)
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(BCRYPT_OBJS) $(TARGETS) test_output.txt
+	rm -f $(OBJS) $(BCRYPT_OBJS) $(TARGETS) test_output.txt log*.txt
 
 # tests --------------------------------------------------------------------
 TESTS := $(wildcard testsuite/*.sh)
