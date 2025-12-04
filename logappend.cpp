@@ -20,6 +20,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <vector>
+#include <sstream>
+#include <fcntl.h>
+#include <sys/file.h>
 #include <sstream> 
 #include "keyAuthentication.h" // containes validateKey function and the stored hash of the system authentication key
 
@@ -57,8 +60,26 @@ void usage(const char* prog) {
               << "       -h                  show this help message\n\n";
 }
 
+bool isFileLocked(const std::string& filename) {
+    int fd = open(filename.c_str(), O_RDWR);
+    if (fd == -1) return false;
+    
+
+    if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+        close(fd);
+
+        return true; 
+    }
+    
+
+    flock(fd, LOCK_UN);
+    close(fd);
+    return false;
+}
+
 bool stringExistsInLine(const std::string& filename, int lineNumber, const std::string& searchString) {
     std::ifstream file(filename);
+
     if (!file.is_open()) {
         return false;
     }
@@ -96,7 +117,7 @@ bool stringExistsInLine(const std::string& filename, int lineNumber, const std::
 bool appendLineToFile(const std::string& filename, const std::string& lineToAppend) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-    
+
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -129,7 +150,7 @@ bool appendLineToFile(const std::string& filename, const std::string& lineToAppe
 bool appendToLine(const std::string& filename, int lineNumber, const std::string& dataToAdd) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-    
+
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -171,7 +192,7 @@ bool appendToLine(const std::string& filename, int lineNumber, const std::string
 bool deleteNameFromLine(const std::string& filename, int lineNumber, const std::string& nameToDelete) {
     std::ifstream inFile(filename);
     std::ofstream tempFile("temp.txt");
-    
+
     if (!inFile.is_open() || !tempFile.is_open()) {
         return false;
     }
@@ -243,7 +264,7 @@ int findRoomNumberLine(const std::string& filename, const std::string& number) {
     if (!file.is_open()) {
         return 0; 
     }
-    
+
     std::string line;
     int currentLine = 1;
     std::string searchPattern = "names in room "+ number + ":";
@@ -589,6 +610,7 @@ int main(int argc, char* argv[]) {
 
     // Generate timestamp of current time in
     // format: 'yyyy-mm-dd/hh:mm:ss'
+    
     std::time_t rawtime;
     std::time(&rawtime);
 
@@ -607,8 +629,15 @@ int main(int argc, char* argv[]) {
         usage(argv[0]);
         return 1;
     }
-    
-    
+    int fd = 0; 
+    if (!isFileLocked(args.logFileName)) {
+	fd = open(args.logFileName.c_str(), O_RDWR);
+    } else {
+	std::cerr << "Error 1010101" << std::endl;
+	return 1;
+    }
+
+    setUpFile(args.logFileName);
 
     // Require key
     if (args.key == "noKey" || args.key.empty()) {         //if key is somehow never overwritten, it means no key was given
@@ -649,6 +678,9 @@ int main(int argc, char* argv[]) {
     std::cout << "  employeeName: " << args.employeeName << "\n";
     std::cout << "  guestName:    " << args.guestName << "\n";
     std::cout << "  logFileName:  " << args.logFileName << "\n"; */
+
+    flock(fd, LOCK_UN);
+    close(fd);
 
     return 0;
 }
