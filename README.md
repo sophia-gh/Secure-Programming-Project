@@ -13,7 +13,8 @@ Logging system implemented based on "Build it, Break it, Fix it" challenge outli
     - **NOTE: AES is implemented on the branch `crypto-encryption`. This branch is not merged with `main` as we did not get the chance to fully test the changes and wanted to maintain the pre-aes branch as well, please check out the other branch to see this implementation.**
 
 <br></br>
-# Usage
+# Usage 
+*for demo purposes the key is `GKgalleryKey99`*
 ## Logappend
 The logAppend program allows a user, with the proper key, to log a guest or employee's actions. The actions include: arriving in the gallery, arriving in a specific room, leaving a specific room, and leaving the gallery. A user must first arrive in the gallery to arrive in a subsequent room, and a user must leave an internal room to leave the gallery. We strayed from the instructions by auto-generating the timestamp rather than allowing users to specify the timestamp. The -B batch option is also not implemented. 
 
