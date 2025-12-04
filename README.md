@@ -3,7 +3,10 @@ Build it, Break it, Fix it, Logging system
 
 Logging system implemented based on "Build it, Break it, Fix it" challenge outlined here: [outline](https://course.ece.cmu.edu/~ece732/s24/homework/bibifi/overview.html)
 
-Password hashing implemented with an external library: [bcrypt](https://github.com/hilch/Bcrypt.cpp). 
+## Security Implementations
+- Password hashing implemented with an external library: [bcrypt](https://github.com/hilch/Bcrypt.cpp). 
+- File locking implmented with `flock()` and file descriptors to prevent multiple processses from accessing the same log file. 
+
 
 # Usage
 ## Logappend
